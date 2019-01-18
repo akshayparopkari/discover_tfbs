@@ -8,4 +8,4 @@ Predict transcription factor (TF) binding specificities/sites (TFBS) using bindi
 
 
 
-LICENSE: [BSD 3-Clause](LICENSE.md)
+LICENSE: [BSD 3-Clause](LICENSE)
