@@ -67,3 +67,36 @@ def get_blastn_results(f):
                         "strand" :[strand]
                     }
     return blastn_results
+
+
+def get_kmers(seq, k=6):
+    """
+    Generate kmers from a given sequence. By default, this function will generate 6-mers
+    from the given sequence. Function will return an error if kmer length is greater than
+    sequence length.
+    
+    :type seq: str/list of str
+    :param seq: a single nucleotide sequence or a list of nucleotide sequences
+    
+    :type k: int
+    :param k: length of kmers to generate, default is 6mers under the constraint that
+              length(seq) > k
+    """
+    try:
+        # check is seq is single sequence or list of sequences
+        assert isinstance(seq, str)
+    except AssertionError:
+        # `seq` is not a str, iterate through the list of nucleotide sequences
+        kmers = dict()
+        for s in seq:
+            kmers[s] = list()
+            for i in range(0, len(s) - (k - 1), 1):
+                kmers[s].append(s[i : i + k])
+        return kmers  # dict of seq and their kmers {sequence: [kmer1, kmer2, ...]}
+    else:
+        kmers = list()
+        # `seq` is a single sequence
+        for i in range(0, len(seq) - (k - 1), 1):
+            kmers.append(seq[i : i + k])
+        return kmers  # list of kmers [kme1, kmer2, ...]
+
