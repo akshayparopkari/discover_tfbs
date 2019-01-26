@@ -127,7 +127,7 @@ def parse_fasta(fasta_file):
 def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", genome="22",
                     feature="CDS"):
     """
-    Parses a GFF and fasta data object (output from parse_fasta()) of a genome and collect
+    Parses a GFF and fasta data (output from parse_fasta()) of a genome and collect
     sequences of certain feature in GFF file. By default, this function will return all
     CDS sequences for all entries in GFF file.
 
