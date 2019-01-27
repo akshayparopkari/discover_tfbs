@@ -178,7 +178,7 @@ def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", gen
                     line = line.strip().split("\t")
                     start, end = int(line[3]), int(line[4])
                     try:
-                        assert start < end
+                        assert (end - start) > 15
                     except AssertionError:
                         # feature length is not positive value, skip
                         continue
@@ -191,14 +191,30 @@ def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", gen
     return None
 
 
-def get_start_prob(parsed_fasta):
+def get_start_prob(fasta_file):
     """
-    From a list of sequences, get the background probabilities of adenine(A), cytosine (C),
-    guanine(G) and thymine (T)
+    From a list of sequences, get the background probabilities of adenine(A),
+    cytosine (C), guanine(G) and thymine (T)
 
-    :type parsed_fasta: dict-like
-    :param parsed_fasta: Output from parse_fasta()
+    :type fasta_file: str
+    :param fasta_file: FASTA file path and name handle
     """
-    for seq in parsed_fasta.keys():
+    # imports
+    from collections import Counter as cnt
+    from Bio.SeqIO.FastaIO import SimpleFastaParser as sfp
+
+    # parse FASTA file and collect nucleotide frequencies
+    bkg_freq = cnt()
+    with open(fasta_file) as infile:
+        for name, seq in sfp(infile):
+            bkg_freq.update(seq)
+
+    # helpful message about input sequences
+    gc_content = 100 * ((bkg_freq["G"] + bkg_freq["G"]) / sum(bkg_freq.values()))
+    print("GC content of sequences in {}: {:0.2f}%".format(fasta_file, gc_content))
+
+    # calculate background probabilities
+    start_prob = {nt: freq / sum(bkg_freq.values()) for nt, freq in bkg_freq.items()}
         
+    return start_prob
 
