@@ -6,6 +6,29 @@
 """
 
 
+def parse_fasta(fasta_file):
+    """
+    Parse a FASTA file for easy pythonic access.
+
+    :type fasta_file: str
+    :param fasta_file: file path and name handle
+    """
+    # imports
+    from sys import exit
+    from os.path import isfile
+    from pyfaidx import Fasta
+
+    try:
+        assert isfile(fasta_file)
+    except AssertionError:
+        # file doesn't exist
+        exit("\n{} does not exist. Please provide a valid genome FASTA file.\n".
+             format(fasta_file))
+    else:
+        # valid FASTA file
+        return Fasta(fasta_file, one_based_attributes=False)
+
+
 def parse_blastn_results(f):
     """
     Get blastn results in a dict.
@@ -98,30 +121,7 @@ def get_kmers(seq, k=6):
         # `seq` is a single sequence
         for i in range(0, len(seq) - (k - 1), 1):
             kmers.append(seq[i: i + k])
-        return kmers  # list of kmers [kme1, kmer2, ...]
-
-
-def parse_fasta(fasta_file):
-    """
-    Parse a FASTA file for easy pythonic access.
-
-    :type fasta_file: str
-    :param fasta_file: file path and name handle
-    """
-    # imports
-    from sys import exit
-    from os.path import isfile
-    from pyfaidx import Fasta
-
-    try:
-        assert isfile(fasta_file)
-    except AssertionError:
-        # file doesn't exist
-        exit("\n{} does not exist. Please provide a valid genome FASTA file.\n".
-             format(fasta_file))
-    else:
-        # valid FASTA file
-        return Fasta(fasta_file, one_based_attributes=False)
+        return kmers  # list of kmers [kmer1, kmer2, ...]
 
 
 def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", genome="22",
@@ -134,8 +134,8 @@ def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", gen
     :type gff_file: str
     :param gff_file: file path and name handle
 
-    :type fasta_file: dict-like
-    :param fasta_file: Output from parse_fasta()
+    :type parsed_fasta: dict-like
+    :param parsed_fasta: Output from parse_fasta()
 
     :type out_fasta: str
     :param out_fasta: Output FASTA file path and name. By default, the file name will be
@@ -154,6 +154,7 @@ def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", gen
     # imports
     from sys import exit
     from os.path import isfile
+    from urllib.parse import parse_qs
 
     # Testing GFF file
     try:
@@ -182,6 +183,22 @@ def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", gen
                         # feature length is not positive value, skip
                         continue
                     else:
-                        outfile.write(">{0}\n{1}\n".format(line[0],
+                        attributes = parse_qs(line[8])
+                        seq_name = attributes["ID"][0]+ "|" +\
+                        attributes["Note"][0].replace(" ", "_")
+                        outfile.write(">{0}\n{1}\n".format(seq_name,
                                       parsed_fasta[line[0]][start: end].seq))
     return None
+
+
+def get_start_prob(parsed_fasta):
+    """
+    From a list of sequences, get the background probabilities of adenine(A), cytosine (C),
+    guanine(G) and thymine (T)
+
+    :type parsed_fasta: dict-like
+    :param parsed_fasta: Output from parse_fasta()
+    """
+    for seq in parsed_fasta.keys():
+        
+
