@@ -191,13 +191,17 @@ def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", gen
     return None
 
 
-def get_start_prob(fasta_file):
+def get_start_prob(fasta_file, verbose=False):
     """
     From a list of sequences, get the background probabilities of adenine(A),
     cytosine (C), guanine(G) and thymine (T)
 
     :type fasta_file: str
     :param fasta_file: FASTA file path and name handle
+
+    :type verbose: bool
+    :param verbose: Set `True` to get GC content of input sequence. By default, the
+                    information will not be displayed to user.
     """
     # imports
     from collections import Counter as cnt
@@ -209,9 +213,16 @@ def get_start_prob(fasta_file):
         for name, seq in sfp(infile):
             bkg_freq.update(seq)
 
-    # helpful message about input sequences
-    gc_content = 100 * ((bkg_freq["G"] + bkg_freq["G"]) / sum(bkg_freq.values()))
-    print("GC content of sequences in {}: {:0.2f}%".format(fasta_file, gc_content))
+    # helpful message about input sequences - optional
+    try:
+        assert verbose
+    except AssertionError:
+        # no calculations requested
+        continue
+    else:
+        # print information
+        gc_content = 100 * ((bkg_freq["G"] + bkg_freq["G"]) / sum(bkg_freq.values()))
+        print("GC content of sequences in {}: {:0.2f}%".format(fasta_file, gc_content))
 
     # calculate background probabilities
     start_prob = {nt: freq / sum(bkg_freq.values()) for nt, freq in bkg_freq.items()}
