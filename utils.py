@@ -6,7 +6,25 @@
 """
 
 
-def parse_fasta(fasta_file):
+def dna_iupac_codes(sequence):
+    """
+    Given a DNA sequence, return all possible degenerate sequences.
+
+    :type sequence: str
+    :param sequence: a valid single DNA nucleotide sequence
+    """
+    # import
+    from itertools import product
+
+    # initialize IUPAC codes in a dict
+    iupac_codes = {"A": ["A"], "C": ["C"], "G": ["G"], "T": ["T"], "R": ["A", "G"],
+                   "Y": ["C", "T"], "S": ["G", "C"], "W": ["A", "T"], "K": ["G", "T"],
+                   "M": ["A", "C"], "B": ["C", "G", "T"], "D": ["A", "G", "T"],
+                   "H": ["A", "C", "T"], "V": ["A", "C", "G"], "N": ["A", "C", "G", "T"]}
+    return list(map("".join, product(*[iupac_codes[nt] for nt in sequence])))
+
+
+def slice_fasta(fasta_file):
     """
     Parse a FASTA file for easy pythonic access.
 
@@ -22,7 +40,7 @@ def parse_fasta(fasta_file):
         assert isfile(fasta_file)
     except AssertionError:
         # file doesn't exist
-        exit("\n{} does not exist. Please provide a valid genome FASTA file.\n".
+        exit("\n{} does not exist. Please provide a valid FASTA file.\n".
              format(fasta_file))
     else:
         # valid FASTA file
@@ -105,6 +123,9 @@ def get_kmers(seq, k=6):
     :param k: length of kmers to generate, default is 6mers under the constraint that
               length(seq) > k
     """
+    # import
+    import numpy as np
+
     try:
         # check is seq is single sequence or list of sequences
         assert isinstance(seq, str)
@@ -112,15 +133,15 @@ def get_kmers(seq, k=6):
         # `seq` is not a str, iterate through the list of nucleotide sequences
         kmers = dict()
         for s in seq:
-            kmers[s] = list()
+            kmers[s] = np.array([])
             for i in range(0, len(s) - (k - 1), 1):
-                kmers[s].append(s[i: i + k])
+                kmers[s] = np.append(kmers[s], s[i: i + k])
         return kmers  # dict of seq and their kmers {sequence: [kmer1, kmer2, ...]}
     else:
-        kmers = list()
+        kmers = np.array([])
         # `seq` is a single sequence
         for i in range(0, len(seq) - (k - 1), 1):
-            kmers.append(seq[i: i + k])
+            kmers = np.append(kmers, seq[i: i + k])
         return kmers  # list of kmers [kmer1, kmer2, ...]
 
 
@@ -184,8 +205,8 @@ def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", gen
                         continue
                     else:
                         attributes = parse_qs(line[8])
-                        seq_name = attributes["ID"][0]+ "|" +\
-                        attributes["Note"][0].replace(" ", "_")
+                        seq_name = attributes["ID"][0] + "|" +\
+                            attributes["Note"][0].replace(" ", "_")
                         outfile.write(">{0}\n{1}\n".format(seq_name,
                                       parsed_fasta[line[0]][start: end].seq))
     return None
@@ -204,21 +225,30 @@ def get_start_prob(fasta_file, verbose=False):
                     information will not be displayed to user.
     """
     # imports
+    from sys import exit
+    from os.path import isfile
     from collections import Counter as cnt
     from Bio.SeqIO.FastaIO import SimpleFastaParser as sfp
 
-    # parse FASTA file and collect nucleotide frequencies
-    bkg_freq = cnt()
-    with open(fasta_file) as infile:
-        for name, seq in sfp(infile):
-            bkg_freq.update(seq)
+    try:
+        assert isfile(fasta_file)
+    except AssertionError:
+        # file doesn't exist
+        exit("\n{} does not exist. Please provide a valid FASTA file.\n".
+             format(fasta_file))
+    else:
+        # parse FASTA file and collect nucleotide frequencies
+        bkg_freq = cnt()
+        with open(fasta_file) as infile:
+            for name, seq in sfp(infile):
+                bkg_freq.update(seq)
 
     # helpful message about input sequences - optional
     try:
         assert verbose
     except AssertionError:
         # no calculations requested
-        continue
+        pass
     else:
         # print information
         gc_content = 100 * ((bkg_freq["G"] + bkg_freq["G"]) / sum(bkg_freq.values()))
@@ -226,6 +256,47 @@ def get_start_prob(fasta_file, verbose=False):
 
     # calculate background probabilities
     start_prob = {nt: freq / sum(bkg_freq.values()) for nt, freq in bkg_freq.items()}
-        
+
     return start_prob
 
+
+def get_transmat(fasta_file, n=5):
+    """
+    From a FASTA file, generate nth order Markov chain transition probability matrix. By
+    default, a 5th order Markov chain transition matrix will be calculated and returned as
+    Pandas dataframe.
+
+    :type fasta_file: str
+    :param fasta_file: FASTA file path and name handle
+    """
+    # imports
+    from sys import exit
+    from os.path import isfile
+    from collections import Counter as cnt
+    import pandas as pd
+    from Bio.SeqIO.FastaIO import SimpleFastaParser as sfp
+
+    try:
+        assert isfile(fasta_file)
+    except AssertionError:
+        # file doesn't exist
+        exit("\n{} does not exist. Please provide a valid FASTA file.\n".
+             format(fasta_file))
+    else:
+        # parse FASTA file and collect nucleotide frequencies
+        with open(fasta_file) as infile:
+            pentamer_counts = dict()
+            for title, seq in sfp(infile):
+                for hexamer in get_kmers(seq, k=n + 1):
+                    hexamer = dna_iupac_codes(hexamer)
+                    for mer in hexamer:
+                        try:
+                            pentamer_counts[mer[:-1]].update(mer[-1])
+                        except KeyError:
+                            pentamer_counts[mer[:-1]] = cnt(mer[-1])
+                intergenic_hexamer_prob = dict()
+                for k1, v1 in pentamer_counts.items():
+                    intergenic_hexamer_prob[k1] = dict()
+                    for k2, v2 in v1.items():
+                        intergenic_hexamer_prob[k1][k2] = v2 / sum(v1.values())
+    return pd.DataFrame.from_dict(intergenic_hexamer_prob, orient="index").fillna(0.)
