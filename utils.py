@@ -5,37 +5,95 @@
 :Author: Akshay Paropkari
 """
 
+# imports
+from sys import exit
+from random import choices
+from itertools import product
+from urllib.parse import parse_qs
+from os.path import isfile, basename
+from time import localtime, strftime
+from collections import Counter as cnt
+err = set()
+try:
+    import pandas as pd
+except ImportError:
+    err.add("pandas")
+try:
+    from pyfaidx import Fasta
+except ImportError:
+    err.add("pyfaidx")
+try:
+    import numpy as np
+except ImportError:
+    err.add("numpy")
+try:
+    from Bio.SeqIO.FastaIO import SimpleFastaParser as sfp
+except ImportError:
+    err.add("biopython")
+if len(err) > 0:
+    for e in err:
+        print("Please install {} package".format(e))
+    exit()
 
-def dna_iupac_codes(sequence):
+
+def random_dna(n=25, ambiguous=True):
+    """
+    Return a random DNA sequence with ambiguous bases of length 'n'
+
+    :type n: int
+    :param n: length of the sequence to be returned, 25bp sequence is the default
+
+    :type ambiguous: bool
+    :param ambiguous: set to False to get sequence without ambiguous bases [A, T, G, C]
+    """
+    if ambiguous:
+        samples = "ACGTRYSWKMBDHVN"
+        weights = [25, 25, 25, 25, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 10]
+        seq = "".join(choices(samples, weights=weights, k=n))
+        return seq
+    else:
+        samples = "ATGC"
+        seq = "".join(choices(samples, k=n))  # all bases will be equally likely
+        return seq
+
+
+def reverse_complement(seq):
+    """
+    For an input sequence, this function returns its reverse complement.
+
+    :type seq: str
+    :param seq: valid DNA nucleotide sequence without any ambiguous bases
+    """
+    base_complements = {"A": "T", "T": "A", "G": "C", "C": "G"}
+    try:
+        return "".join([base_complements[nt] for nt in seq[::-1]])
+    except KeyError:
+        # ambiguous base encountered
+        return "Invalid/ambiguous base encountered in input sequence."
+
+
+def dna_iupac_codes(seq):
     """
     Given a DNA sequence, return all possible degenerate sequences.
 
     :type sequence: str
     :param sequence: a valid single DNA nucleotide sequence
     """
-    # import
-    from itertools import product
-
     # initialize IUPAC codes in a dict
     iupac_codes = {"A": ["A"], "C": ["C"], "G": ["G"], "T": ["T"], "R": ["A", "G"],
                    "Y": ["C", "T"], "S": ["G", "C"], "W": ["A", "T"], "K": ["G", "T"],
                    "M": ["A", "C"], "B": ["C", "G", "T"], "D": ["A", "G", "T"],
                    "H": ["A", "C", "T"], "V": ["A", "C", "G"], "N": ["A", "C", "G", "T"]}
-    return list(map("".join, product(*[iupac_codes[nt] for nt in sequence])))
+    return list(map("".join, product(*[iupac_codes[nt] for nt in seq])))
 
 
-def slice_fasta(fasta_file):
+def parse_fasta(fasta_file):
     """
     Parse a FASTA file for easy pythonic access.
 
     :type fasta_file: str
     :param fasta_file: file path and name handle
     """
-    # imports
-    from sys import exit
-    from os.path import isfile
-    from pyfaidx import Fasta
-
     try:
         assert isfile(fasta_file)
     except AssertionError:
@@ -51,10 +109,6 @@ def parse_blastn_results(f):
     """
     Get blastn results in a dict.
     """
-    # imports
-    from time import localtime, strftime
-    from os.path import basename
-
     print("{}: PARSING BLASTn RESULTS".format(strftime("%m/%d/%Y %H:%M:%S", localtime())))
     blastn_results = dict()
     tf_name = basename(f).split("_")[0]
@@ -116,16 +170,13 @@ def get_kmers(seq, k=6):
     from the given sequence. Function will return an error if kmer length is greater than
     sequence length.
 
-    :type seq: str/list of str
+    :type seq: str
     :param seq: a single nucleotide sequence or a list of nucleotide sequences
 
     :type k: int
     :param k: length of kmers to generate, default is 6mers under the constraint that
               length(seq) > k
     """
-    # import
-    import numpy as np
-
     try:
         # check is seq is single sequence or list of sequences
         assert isinstance(seq, str)
@@ -133,15 +184,11 @@ def get_kmers(seq, k=6):
         # `seq` is not a str, iterate through the list of nucleotide sequences
         kmers = dict()
         for s in seq:
-            kmers[s] = np.array([])
-            for i in range(0, len(s) - (k - 1), 1):
-                kmers[s] = np.append(kmers[s], s[i: i + k])
+            kmers[s] = np.asarray([s[i: i + k] for i in range(0, len(s) - (k - 1), 1)])
         return kmers  # dict of seq and their kmers {sequence: [kmer1, kmer2, ...]}
     else:
-        kmers = np.array([])
         # `seq` is a single sequence
-        for i in range(0, len(seq) - (k - 1), 1):
-            kmers = np.append(kmers, seq[i: i + k])
+        kmers = np.asarray([seq[i: i + k] for i in range(0, len(seq) - (k - 1), 1)])
         return kmers  # list of kmers [kmer1, kmer2, ...]
 
 
@@ -172,25 +219,20 @@ def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", gen
                     can be changed by user to other feature types such as 'exon',
                     'intergenic_region', 'start_codon', 'stop_codon', etc.
     """
-    # imports
-    from sys import exit
-    from os.path import isfile
-    from urllib.parse import parse_qs
-
     # Testing GFF file
     try:
         assert isfile(gff_file)
     except AssertionError:
         # file doesn't exist
-        exit("\n{} does not exist. Please provide a valid GFF file.\n".
-             format(gff_file))
+        exit("\n{} does not exist. Please provide a valid GFF file.\n".format(gff_file))
 
     # Go through GFF file and write out feature sequences to output FASTA file
     with open(gff_file) as infile:
         with open(out_fasta, "w") as outfile:
             for line in infile:
                 try:
-                    assert line.startswith("Ca22chr")
+                    assert line.startswith("Ca{}chr".format(genome))
+                    assert line.strip().split("\t")[2] == feature
                 except AssertionError:
                     # invalid line, skip processing
                     continue
@@ -205,8 +247,23 @@ def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", gen
                         continue
                     else:
                         attributes = parse_qs(line[8])
-                        seq_name = attributes["ID"][0] + "|" +\
-                            attributes["Note"][0].replace(" ", "_")
+                        try:
+                            seq_name = "|".join([attributes["ID"][0],
+                                                attributes["orf_classification"][0],
+                                                attributes["parent_feature_type"][0],
+                                                attributes["Parent"][0], line[2]])
+                            seq_name = seq_name.replace(" ", "_")
+                        except KeyError:
+                            # sparse GFF attributes
+                            try:
+                                seq_name = "|".join([attributes["Parent"][0], line[1],
+                                                     line[2]])
+                                seq_name = seq_name.replace(" ", "_")
+                            except KeyError:
+                                # even more sparse GFF attributes
+                                seq_name = "|".join([attributes["ID"][0], line[1],
+                                                     line[2]])
+                                seq_name = seq_name.replace(" ", "_")
                         outfile.write(">{0}\n{1}\n".format(seq_name,
                                       parsed_fasta[line[0]][start: end].seq))
     return None
@@ -224,12 +281,6 @@ def get_start_prob(fasta_file, verbose=False):
     :param verbose: Set `True` to get GC content of input sequence. By default, the
                     information will not be displayed to user.
     """
-    # imports
-    from sys import exit
-    from os.path import isfile
-    from collections import Counter as cnt
-    from Bio.SeqIO.FastaIO import SimpleFastaParser as sfp
-
     try:
         assert isfile(fasta_file)
     except AssertionError:
@@ -269,13 +320,6 @@ def get_transmat(fasta_file, n=5):
     :type fasta_file: str
     :param fasta_file: FASTA file path and name handle
     """
-    # imports
-    from sys import exit
-    from os.path import isfile
-    from collections import Counter as cnt
-    import pandas as pd
-    from Bio.SeqIO.FastaIO import SimpleFastaParser as sfp
-
     try:
         assert isfile(fasta_file)
     except AssertionError:
@@ -294,9 +338,9 @@ def get_transmat(fasta_file, n=5):
                             pentamer_counts[mer[:-1]].update(mer[-1])
                         except KeyError:
                             pentamer_counts[mer[:-1]] = cnt(mer[-1])
-                intergenic_hexamer_prob = dict()
+                hexamer_prob = dict()
                 for k1, v1 in pentamer_counts.items():
-                    intergenic_hexamer_prob[k1] = dict()
+                    hexamer_prob[k1] = dict()
                     for k2, v2 in v1.items():
-                        intergenic_hexamer_prob[k1][k2] = v2 / sum(v1.values())
-    return pd.DataFrame.from_dict(intergenic_hexamer_prob, orient="index").fillna(0.)
+                        hexamer_prob[k1][k2] = v2 / sum(v1.values())
+    return pd.DataFrame.from_dict(hexamer_prob, orient="index").fillna(0.)
