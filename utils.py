@@ -311,7 +311,7 @@ def get_start_prob(fasta_file, verbose=False):
     return start_prob
 
 
-def get_transmat(fasta_file, n=5):
+def get_transmat(fasta_file, n=3):
     """
     From a FASTA file, generate nth order Markov chain transition probability matrix. By
     default, a 5th order Markov chain transition matrix will be calculated and returned as
