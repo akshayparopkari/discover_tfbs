@@ -1,9 +1,12 @@
 #! /usr/bin/env python
 
 """
-:Abstract: File containing utility functions.
-:Author: Akshay Paropkari
+File containing utility functions.
 """
+
+__author__ = "Akshay Paropkari"
+__version__ = "0.1.0"
+
 
 # imports
 from sys import exit
@@ -27,6 +30,7 @@ try:
 except ImportError:
     err.add("numpy")
 try:
+    from Bio import Seq
     from Bio.SeqIO.FastaIO import SimpleFastaParser as sfp
 except ImportError:
     err.add("biopython")
@@ -64,12 +68,8 @@ def reverse_complement(seq):
     :type seq: str
     :param seq: valid DNA nucleotide sequence without any ambiguous bases
     """
-    base_complements = {"A": "T", "T": "A", "G": "C", "C": "G"}
-    try:
-        return "".join([base_complements[nt] for nt in seq[::-1]])
-    except KeyError:
-        # ambiguous base encountered
-        return "Invalid/ambiguous base encountered in input sequence."
+    base_complements = Seq.IUPAC.IUPACData.ambiguous_dna_complement
+    return "".join([base_complements[nt] for nt in seq[::-1]])
 
 
 def dna_iupac_codes(seq):
@@ -89,7 +89,7 @@ def dna_iupac_codes(seq):
 
 def parse_fasta(fasta_file):
     """
-    Parse a FASTA file for easy pythonic access.
+    Parse a FASTA file for easy access.
 
     :type fasta_file: str
     :param fasta_file: file path and name handle
@@ -295,14 +295,9 @@ def get_start_prob(fasta_file, verbose=False):
                 bkg_freq.update(seq)
 
     # helpful message about input sequences - optional
-    try:
-        assert verbose
-    except AssertionError:
-        # no calculations requested
-        pass
-    else:
-        # print information
-        gc_content = 100 * ((bkg_freq["G"] + bkg_freq["G"]) / sum(bkg_freq.values()))
+    if verbose:
+        gc_content = 100 * ((bkg_freq["G"] + bkg_freq["C"]) /\
+            sum([bkg_freq["C"], bkg_freq["T"], bkg_freq["A"], bkg_freq["G"]]))
         print("GC content of sequences in {}: {:0.2f}%".format(fasta_file, gc_content))
 
     # calculate background probabilities
