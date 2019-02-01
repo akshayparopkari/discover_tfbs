@@ -322,18 +322,31 @@ def get_transmat(fasta_file, n=3):
     else:
         # parse FASTA file and collect nucleotide frequencies
         with open(fasta_file) as infile:
-            pentamer_counts = dict()
+            kmer_counts = dict()
             for title, seq in sfp(infile):
-                for hexamer in get_kmers(seq, k=n + 1):
-                    hexamer = dna_iupac_codes(hexamer)
-                    for mer in hexamer:
+
+                # get a list of all unambiguous kmers for FASTA sequence
+                seqs = [dna_iupac_codes(seq) for seq in get_kmers(seq, n + 1)]
+
+                # iterate through seqs and get counts of nt following kmer
+                for kmer in seqs:
+                    try:
+                        assert len(kmer) == 1
+                    except AssertionError:
+                        # more than 1 unambiguous sequence in kmer list
+                        for mer in kmer:
+                            try:
+                                kmer_counts[mer[:-1]].update(mer[-1])
+                            except KeyError:
+                                kmer_counts[mer[:-1]] = cnt(mer[-1])
+                    else:
+                        # single unambiguous sequence in kmer list
                         try:
-                            pentamer_counts[mer[:-1]].update(mer[-1])
+                            kmer_counts[kmer[0][:-1]].update(kmer[0][-1])
                         except KeyError:
-                            pentamer_counts[mer[:-1]] = cnt(mer[-1])
-                hexamer_prob = dict()
-                for k1, v1 in pentamer_counts.items():
-                    hexamer_prob[k1] = dict()
-                    for k2, v2 in v1.items():
-                        hexamer_prob[k1][k2] = v2 / sum(v1.values())
-    return pd.DataFrame.from_dict(hexamer_prob, orient="index").fillna(0.)
+                            kmer_counts[kmer[0][:-1]] = cnt(kmer[0][-1])
+
+            # calculate probabilities for all nt after kmer
+            kmer_prob = {k1: {k2: v2 / sum(v1.values()) for k2, v2 in v1.items()}
+                         for k1, v1 in kmer_counts.items()}
+    return pd.DataFrame.from_dict(kmer_prob, orient="index").fillna(0.)
