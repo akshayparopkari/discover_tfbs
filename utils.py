@@ -182,14 +182,12 @@ def get_kmers(seq, k=6):
         assert isinstance(seq, str)
     except AssertionError:
         # `seq` is not a str, iterate through the list of nucleotide sequences
-        kmers = dict()
-        for s in seq:
-            kmers[s] = np.asarray([s[i: i + k] for i in range(0, len(s) - (k - 1), 1)])
-        return kmers  # dict of seq and their kmers {sequence: [kmer1, kmer2, ...]}
+        # dict of seq and their kmers {sequence: [kmer1, kmer2, ...]}
+        return  {s: [s[i: i + k] for i in range(0, len(s) - (k - 1), 1)] for s in seq}
     else:
         # `seq` is a single sequence
-        kmers = np.asarray([seq[i: i + k] for i in range(0, len(seq) - (k - 1), 1)])
-        return kmers  # list of kmers [kmer1, kmer2, ...]
+        # list of kmers [kmer1, kmer2, ...]
+        return [seq[i: i + k] for i in range(0, len(seq) - (k - 1), 1)]
 
 
 def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", genome="22",
