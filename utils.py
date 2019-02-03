@@ -16,6 +16,7 @@ from urllib.parse import parse_qs
 from os.path import isfile, basename
 from time import localtime, strftime
 from collections import Counter as cnt
+from os.path import join, realpath, isfile
 err = set()
 try:
     import pandas as pd
@@ -103,6 +104,34 @@ def parse_fasta(fasta_file):
     else:
         # valid FASTA file
         return Fasta(fasta_file, one_based_attributes=False)
+
+
+def bkg_gc(bkg_fasta, outdir):
+    """
+    Parse input FASTA file, spread out sequences based on GC percent content
+    into spearate file. If seqA is 35% and seqB is 89%, they will saved in
+    outdir/bkg_gc_35.txt and outdir/bkg_gc_89.txt, respectively.
+
+    :type bkg_fasta: str/file name handle
+    :param bkg_fasta: FASTA file containing background sequences
+
+    :type outdir: str/file name handle
+    :param outdir: Folder to save binned files in
+    """
+    with open(bkg_fasta) as infasta:
+        for name, seq in sfp(infasta):
+            bseqs = dna_iupac_codes(seq)
+            gc = {s: 100 * (s.count("G") + s.count("C")) /\
+                  (s.count("G") + s.count("C") + s.count("A") + s.count("T"))
+                  for s in bseqs}
+            for sequence, gc in gc.items():
+                outfnh = realpath(join(outdir, "bkg_gc_{}.txt".format(round(gc))))
+                if isfile(outfnh):
+                    with open(outfnh, "a") as outfile:
+                        outfile.write(">{0}|gc:{1:.2f}\n{2}\n".format(name, gc, sequence))
+                else:
+                    with open(outfnh, "w") as outfile:
+                        outfile.write(">{0}|gc:{1:.2f}\n{2}\n".format(name, gc, sequence))
 
 
 def parse_blastn_results(f):
