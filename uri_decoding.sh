@@ -5,7 +5,8 @@
 #
 # For an input file, decode percent encoding characters and replace with standard human
 # readable chracters. This script is specifically written to decode GFF file information
-# from Candida Genome Database (CGD). The following encodings are decoded -
+# from Candida Genome Database (CGD). The decode file will be sorted by chromosome name
+# and start coordinate. The following encodings are decoded -
 # %20: '_' (underscore)
 # %22: '"' (double quotation mark)
 # %23: '#' (hash sign)
