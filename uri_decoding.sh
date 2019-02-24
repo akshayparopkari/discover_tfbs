@@ -5,8 +5,7 @@
 #
 # For an input file, decode percent encoding characters and replace with standard human
 # readable chracters. This script is specifically written to decode GFF file information
-# from Candida Genome Database (CGD). The decode file will be sorted by chromosome name
-# and start coordinate. The following encodings are decoded -
+# from Candida Genome Database (CGD). The following encodings are decoded -
 # %20: '_' (underscore)
 # %22: '"' (double quotation mark)
 # %23: '#' (hash sign)
@@ -34,7 +33,7 @@
 #########################################################################################
 #
 # AUTHOR: Akshay Paropkari
-# VERSION: 0.0.2
+# VERSION: 0.0.5
 #
 #########################################################################################
 
@@ -46,5 +45,4 @@ fi
 
 INPUT_FILE=$(realpath "$1")
 sed -i -e 's/%20/_/g' -e 's/%22/"/g' -e 's/%23/#/g' -e 's/%25/%/g' -e 's/%26/\&/g' -e 's/%27/'\''/g'  -e 's/%28/(/g' -e 's/%29/)/g' -e 's/%2B/+/g' -e 's/%2C/,/g' -e 's/%2F/\//g' -e 's/%3A/:/g' -e 's/%3B/;/g' -e 's/%3E/>/g' -e 's/%5B/[/g' -e 's/%5D/]/g' "$INPUT_FILE"
-sort -k1,1 -k4,4n "$INPUT_FILE"
-echo -e "$(date "+%a %D %r"): $INPUT_FILE decoded and sorted"
+echo -e "$(date "+%a %D %r"): $INPUT_FILE decoded and saved as $(realpath "$INPUT_FILE")"
