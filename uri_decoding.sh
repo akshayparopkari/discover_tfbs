@@ -33,7 +33,7 @@
 #########################################################################################
 #
 # AUTHOR: Akshay Paropkari
-# VERSION: 0.0.1
+# VERSION: 0.0.2
 #
 #########################################################################################
 
@@ -43,7 +43,7 @@ if [[ -z "$1" ]] ; then
     exit 1
 fi
 
-# Create command to run
 INPUT_FILE=$(realpath "$1")
 sed -i -e 's/%20/_/g' -e 's/%22/"/g' -e 's/%23/#/g' -e 's/%25/%/g' -e 's/%26/\&/g' -e 's/%27/'\''/g'  -e 's/%28/(/g' -e 's/%29/)/g' -e 's/%2B/+/g' -e 's/%2C/,/g' -e 's/%2F/\//g' -e 's/%3A/:/g' -e 's/%3B/;/g' -e 's/%3E/>/g' -e 's/%5B/[/g' -e 's/%5D/]/g' "$INPUT_FILE"
-echo -e "$(date "+%a %D %r"): $INPUT_FILE decoded"
+sort -k1,1 -k4,4n "$INPUT_FILE"
+echo -e "$(date "+%a %D %r"): $INPUT_FILE decoded and sorted"
