@@ -140,7 +140,7 @@ PyYAML==5.1
 pyzmq==17.1.2
 qtconsole==4.4.3
 reportlab==3.5.19
-requests==2.14.2
+requests==2.21.0
 rpy2==2.9.1
 RSeQC==3.0.0
 s3transfer==0.1.13
@@ -165,7 +165,7 @@ tqdm==4.7.2
 traitlets==4.3.2
 traittypes==0.2.1
 tzlocal==1.5.1
-urllib3==1.12
+urllib3==1.24.2
 vaex-astro==0.4.0
 vaex-core==0.7.3
 vaex-distributed==0.3.0
