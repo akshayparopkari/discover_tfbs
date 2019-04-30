@@ -5,7 +5,7 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
 # imports
@@ -109,7 +109,7 @@ def parse_fasta(fasta_file):
 def bkg_gc(bkg_fasta, outdir):
     """
     Parse input FASTA file, spread out sequences based on GC percent content
-    into spearate file. If seqA is 35% and seqB is 89%, they will saved in
+    into separate file. If seqA is 35% and seqB is 89%, they will saved in
     outdir/bkg_gc_35.txt and outdir/bkg_gc_89.txt, respectively.
 
     :type bkg_fasta: str/file name handle
@@ -333,7 +333,7 @@ def get_start_prob(fasta_file, verbose=False):
     return start_prob
 
 
-def get_transmat(fasta_file, n=3):
+def get_transmat(fasta_file, n=5):
     """
     From a FASTA file, generate nth order Markov chain transition probability matrix. By
     default, a 5th order Markov chain transition matrix will be calculated and returned as
@@ -379,3 +379,51 @@ def get_transmat(fasta_file, n=3):
             kmer_prob = {k1: {k2: v2 / sum(v1.values()) for k2, v2 in v1.items()}
                          for k1, v1 in kmer_counts.items()}
     return pd.DataFrame.from_dict(kmer_prob, orient="index").fillna(0.)
+
+
+def pac(seqA, seqB):
+    """
+    Poisson based similarity measure, PAC.
+    Adopted from Jacques van Helden BIOINFORMATICS (2002)
+
+    :type seqA: str
+    :param seqA: Nucleotide sequence, preferably unambiguous DNA sequence
+
+    :type seqA: str
+    :param seqA: Nucleotide sequence, preferably unambiguous DNA sequence
+    """
+
+    # length of kmer is half if seqA length
+    k = round(len(seqA) / 3)
+
+    # kmer word count for seqA
+    seqA_kmers = get_kmers(seqA, k)
+    seqA_wc = {kmer: seqA_kmers.count(kmer) for kmer in seqA_kmers}
+    # prior probability of kmer 'w'
+    fw_A = {word: freq / len(seqA_kmers) for word, freq in seqA_wc.items()}
+    # expected number of occurrences
+    mw_A = {word: pp * (len(seqA) - k + 1) for word, pp in fw_A.items()}
+
+    # kmer word count for seqB
+    seqB_kmers = get_kmers(seqB, k)
+    seqB_wc = {kmer: seqB_kmers.count(kmer) for kmer in seqB_kmers}
+    # prior probability of kmer 'w'
+    fw_B = {word: freq / len(seqB_kmers) for word, freq in seqB_wc.items()}
+    # expected number of occurrences
+    mw_B = {word: pp * (len(seqB) - k + 1) for word, pp in fw_B.items()}
+
+    similarity = 0
+    prod = 1
+    total_patterns = set(seqA_kmers + seqB_kmers)
+    for word in total_patterns:
+        Cw_AB = min([seqA_wc.get(word, 0), seqB_wc.get(word, 0)])
+        if Cw_AB > 0:
+            prob = (1 - poisson.cdf(Cw_AB - 1, mw_A[word])) *\
+                   (1 - poisson.cdf(Cw_AB - 1, mw_B[word]))
+        else:
+            prob = 1
+        prod *= prob
+        similarity += (1 - prob)
+    prod = 1 - (prod ** (1 / len(total_patterns)))
+    similarity = similarity / len(total_patterns)
+    return similarity, prod
