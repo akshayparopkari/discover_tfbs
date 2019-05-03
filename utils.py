@@ -23,10 +23,6 @@ try:
 except ImportError:
     err.add("pandas")
 try:
-    from pyfaidx import Fasta
-except ImportError:
-    err.add("pyfaidx")
-try:
     import numpy as np
 except ImportError:
     err.add("numpy")
@@ -103,7 +99,9 @@ def parse_fasta(fasta_file):
              format(fasta_file))
     else:
         # valid FASTA file
-        return Fasta(fasta_file, one_based_attributes=False)
+        with open(fasta_file) as input_fasta:
+            for header, sequence in sfp(input_fasta):
+                yield header, sequence
 
 
 def bkg_gc(bkg_fasta, outdir):
@@ -118,20 +116,19 @@ def bkg_gc(bkg_fasta, outdir):
     :type outdir: str/file name handle
     :param outdir: Folder to save binned files in
     """
-    with open(bkg_fasta) as infasta:
-        for name, seq in sfp(infasta):
-            bseqs = dna_iupac_codes(seq)
-            gc = {s: 100 * (s.count("G") + s.count("C")) /\
-                  (s.count("G") + s.count("C") + s.count("A") + s.count("T"))
-                  for s in bseqs}
-            for sequence, gc in gc.items():
-                outfnh = realpath(join(outdir, "bkg_gc_{}.txt".format(round(gc))))
-                if isfile(outfnh):
-                    with open(outfnh, "a") as outfile:
-                        outfile.write(">{0}|gc:{1:.2f}\n{2}\n".format(name, gc, sequence))
-                else:
-                    with open(outfnh, "w") as outfile:
-                        outfile.write(">{0}|gc:{1:.2f}\n{2}\n".format(name, gc, sequence))
+    for header, seq in parse_fasta(bkg_fasta):
+        bseqs = dna_iupac_codes(seq)
+        gc = {s: 100 * (s.count("G") + s.count("C")) /\
+              (s.count("G") + s.count("C") + s.count("A") + s.count("T"))
+              for s in bseqs}
+        for sequence, gc in gc.items():
+            outfnh = realpath(join(outdir, "bkg_gc_{}.txt".format(round(gc))))
+            if isfile(outfnh):
+                with open(outfnh, "a") as outfile:
+                    outfile.write(">{0}|gc:{1:.2f}\n{2}\n".format(header, gc, sequence))
+            else:
+                with open(outfnh, "w") as outfile:
+                    outfile.write(">{0}|gc:{1:.2f}\n{2}\n".format(header, gc, sequence))
 
 
 def parse_blastn_results(f):
