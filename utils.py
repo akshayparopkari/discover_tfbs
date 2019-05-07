@@ -5,7 +5,7 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 
 # imports
@@ -13,10 +13,9 @@ from sys import exit
 from random import choices
 from itertools import product
 from urllib.parse import parse_qs
-from os.path import isfile, basename
 from time import localtime, strftime
 from collections import Counter as cnt
-from os.path import join, realpath, isfile
+from os.path import join, realpath, isfile, basename
 err = set()
 try:
     import pandas as pd
@@ -133,6 +132,23 @@ def bkg_gc(bkg_fasta, outdir):
             else:
                 with open(outfnh, "w") as outfile:
                     outfile.write(">{0}|gc:{1:.2f}\n{2}\n".format(header, gc, sequence))
+
+
+def calculate_gc_percent(sequence: str) -> float:
+    """
+    Compute the GC percent of unambiguous input nucleotide sequence.
+
+    :type sequence: str
+    :param sequence: sequence consisting of A, T, G, C letters
+    """
+
+    # get length of input sequence
+    seq_len = len(sequence)
+
+    # get number of G and C in input sequence
+    sequence = sequence.upper()  # convert to upper case
+    gc = 100 * (sequence.count("G") + sequence.count("C")) / seq_len
+    return gc
 
 
 def parse_blastn_results(f):
@@ -384,7 +400,7 @@ def get_transmat(fasta_file, n=5):
 
 def pac(seqA: str, seqB: str):
     """
-    Poisson based similarity measure, PAC. Adopted from Jacques van Helden 
+    Poisson based similarity measure, PAC. Adopted from Jacques van Helden
     BIOINFORMATICS (2002)
 
     :type seqA: str
