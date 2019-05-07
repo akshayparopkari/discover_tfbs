@@ -382,10 +382,10 @@ def get_transmat(fasta_file, n=5):
     return pd.DataFrame.from_dict(kmer_prob, orient="index").fillna(0.)
 
 
-def pac(seqA, seqB):
+def pac(seqA: str, seqB: str):
     """
-    Poisson based similarity measure, PAC.
-    Adopted from Jacques van Helden BIOINFORMATICS (2002)
+    Poisson based similarity measure, PAC. Adopted from Jacques van Helden 
+    BIOINFORMATICS (2002)
 
     :type seqA: str
     :param seqA: Nucleotide sequence, preferably unambiguous DNA sequence
@@ -393,7 +393,6 @@ def pac(seqA, seqB):
     :type seqA: str
     :param seqA: Nucleotide sequence, preferably unambiguous DNA sequence
     """
-
     # length of kmer is half if seqA length
     k = round(len(seqA) / 3)
 
@@ -405,7 +404,6 @@ def pac(seqA, seqB):
     # expected number of occurrences
     mw_A = {word: pp * (len(seqA) - k + 1) for word, pp in fw_A.items()}
 
-    # kmer word count for seqB
     seqB_kmers = get_kmers(seqB, k)
     seqB_wc = {kmer: seqB_kmers.count(kmer) for kmer in seqB_kmers}
     # prior probability of kmer 'w'
@@ -425,6 +423,5 @@ def pac(seqA, seqB):
             prob = 1
         prod *= prob
         similarity += (1 - prob)
-    prod = 1 - (prod ** (1 / len(total_patterns)))
-    similarity = similarity / len(total_patterns)
-    return similarity, prod
+
+    return np.mean(similarity), np.mean(prod)
