@@ -27,6 +27,10 @@ try:
 except ImportError:
     err.add("numpy")
 try:
+    from scipy.stats import poisson
+except ImportError:
+    err.add("scipy")
+try:
     from Bio import Seq
     from Bio.SeqIO.FastaIO import SimpleFastaParser as sfp
 except ImportError:
@@ -118,7 +122,7 @@ def bkg_gc(bkg_fasta, outdir):
     """
     for header, seq in parse_fasta(bkg_fasta):
         bseqs = dna_iupac_codes(seq)
-        gc = {s: 100 * (s.count("G") + s.count("C")) /\
+        gc = {s: 100 * (s.count("G") + s.count("C")) /
               (s.count("G") + s.count("C") + s.count("A") + s.count("T"))
               for s in bseqs}
         for sequence, gc in gc.items():
@@ -209,7 +213,7 @@ def get_kmers(seq, k=6):
     except AssertionError:
         # `seq` is not a str, iterate through the list of nucleotide sequences
         # dict of seq and their kmers {sequence: [kmer1, kmer2, ...]}
-        return  {s: [s[i: i + k] for i in range(0, len(s) - (k - 1), 1)] for s in seq}
+        return {s: [s[i: i + k] for i in range(0, len(s) - (k - 1), 1)] for s in seq}
     else:
         # `seq` is a single sequence
         # list of kmers [kmer1, kmer2, ...]
@@ -320,7 +324,7 @@ def get_start_prob(fasta_file, verbose=False):
 
     # helpful message about input sequences - optional
     if verbose:
-        gc_content = 100 * ((bkg_freq["G"] + bkg_freq["C"]) /\
+        gc_content = 100 * ((bkg_freq["G"] + bkg_freq["C"]) /
             sum([bkg_freq["C"], bkg_freq["T"], bkg_freq["A"], bkg_freq["G"]]))
         print("GC content of sequences in {}: {:0.2f}%".format(fasta_file, gc_content))
 
