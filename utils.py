@@ -341,7 +341,7 @@ def get_start_prob(fasta_file, verbose=False):
     # helpful message about input sequences - optional
     if verbose:
         gc_content = 100 * ((bkg_freq["G"] + bkg_freq["C"]) /
-            sum([bkg_freq["C"], bkg_freq["T"], bkg_freq["A"], bkg_freq["G"]]))
+                            sum([bkg_freq["C"], bkg_freq["T"], bkg_freq["A"], bkg_freq["G"]]))
         print("GC content of sequences in {}: {:0.2f}%".format(fasta_file, gc_content))
 
     # calculate background probabilities
@@ -414,22 +414,23 @@ def pac(seqA: str, seqB: str):
 
     # kmer word count for seqA
     seqA_kmers = get_kmers(seqA, k)
+    n_seqA_kmers = len(seqA_kmers)
     seqA_wc = {kmer: seqA_kmers.count(kmer) for kmer in seqA_kmers}
     # prior probability of kmer 'w'
-    fw_A = {word: freq / len(seqA_kmers) for word, freq in seqA_wc.items()}
+    fw_A = {word: freq / n_seqA_kmers for word, freq in seqA_wc.items()}
     # expected number of occurrences
-    mw_A = {word: pp * (len(seqA) - k + 1) for word, pp in fw_A.items()}
+    mw_A = {word: pp * n_seqA_kmers for word, pp in fw_A.items()}
 
     seqB_kmers = get_kmers(seqB, k)
+    n_seqB_kmers = len(seqB_kmers)
     seqB_wc = {kmer: seqB_kmers.count(kmer) for kmer in seqB_kmers}
     # prior probability of kmer 'w'
-    fw_B = {word: freq / len(seqB_kmers) for word, freq in seqB_wc.items()}
+    fw_B = {word: freq / n_seqB_kmers for word, freq in seqB_wc.items()}
     # expected number of occurrences
-    mw_B = {word: pp * (len(seqB) - k + 1) for word, pp in fw_B.items()}
+    mw_B = {word: pp * n_seqB_kmers for word, pp in fw_B.items()}
 
-    similarity = 0
-    prod = 1
     total_patterns = set(seqA_kmers + seqB_kmers)
+    n_patterns = len(total_patterns)
     for word in total_patterns:
         Cw_AB = min([seqA_wc.get(word, 0), seqB_wc.get(word, 0)])
         if Cw_AB > 0:
@@ -437,7 +438,22 @@ def pac(seqA: str, seqB: str):
                    (1 - poisson.cdf(Cw_AB - 1, mw_B[word]))
         else:
             prob = 1
-        prod *= prob
-        similarity += (1 - prob)
-
-    return np.mean(similarity), np.mean(prod)
+        try:
+            prod
+        except NameError:
+            # prod doesn't exist, initialize it
+            prod = prob
+        else:
+            # prod exists, update its value
+            prod *= prob
+        try:
+            similarity
+        except NameError:
+            # prod doesn't exist, initialize it
+            similarity = 1 - prob
+        else:
+            # prod exists, update its value
+            similarity += 1 - prob
+    prod = 1 - (prod ** (1 / n_patterns))
+    similarity = similarity / n_patterns
+    return similarity, prod
