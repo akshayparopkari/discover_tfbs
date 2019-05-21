@@ -5,16 +5,17 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 
 # imports
 from sys import exit
 from random import choices
 from itertools import product
+from functools import lru_cache
 from urllib.parse import parse_qs
 from time import localtime, strftime
-from collections import Counter as cnt
+from collections import defaultdict, Counter as cnt
 from os.path import join, realpath, isfile, basename
 err = set()
 try:
@@ -39,7 +40,13 @@ if len(err) > 0:
         print("Please install {} package".format(e))
     exit()
 
+try:
+    profile
+except NameError:
+    profile = lambda x: x
 
+
+@profile
 def random_dna(n=25, ambiguous=True):
     """
     Return a random DNA sequence with ambiguous bases of length 'n'
@@ -61,6 +68,7 @@ def random_dna(n=25, ambiguous=True):
         return seq
 
 
+@profile
 def reverse_complement(seq):
     """
     For an input sequence, this function returns its reverse complement.
@@ -72,6 +80,7 @@ def reverse_complement(seq):
     return "".join([base_complements[nt] for nt in seq[::-1]])
 
 
+@profile
 def dna_iupac_codes(seq):
     """
     Given a DNA sequence, return all possible degenerate sequences.
@@ -102,11 +111,15 @@ def parse_fasta(fasta_file):
              format(fasta_file))
     else:
         # valid FASTA file
-        with open(fasta_file) as input_fasta:
-            for header, sequence in sfp(input_fasta):
-                yield header, sequence
+        try:
+            with open(fasta_file) as input_fasta:
+                for header, sequence in sfp(input_fasta):
+                    yield header, sequence
+        except StopIteration:
+            return
 
 
+@profile
 def bkg_gc(bkg_fasta, outdir):
     """
     Parse input FASTA file, spread out sequences based on GC percent content
@@ -134,6 +147,7 @@ def bkg_gc(bkg_fasta, outdir):
                     outfile.write(">{0}|gc:{1:.2f}\n{2}\n".format(header, gc, sequence))
 
 
+@profile
 def calculate_gc_percent(sequence: str) -> float:
     """
     Compute the GC percent of unambiguous input nucleotide sequence.
@@ -151,6 +165,7 @@ def calculate_gc_percent(sequence: str) -> float:
     return gc
 
 
+@profile
 def parse_blastn_results(f):
     """
     Get blastn results in a dict.
@@ -210,6 +225,7 @@ def parse_blastn_results(f):
     return blastn_results
 
 
+@profile
 def get_kmers(seq, k=6):
     """
     Generate kmers from a given sequence. By default, this function will generate 6-mers
@@ -229,13 +245,39 @@ def get_kmers(seq, k=6):
     except AssertionError:
         # `seq` is not a str, iterate through the list of nucleotide sequences
         # dict of seq and their kmers {sequence: [kmer1, kmer2, ...]}
-        return {s: [s[i: i + k] for i in range(0, len(s) - (k - 1), 1)] for s in seq}
+        return ({s: [s[i: i + k] for i in range(0, len(s) - (k - 1), 1)] for s in seq})
     else:
         # `seq` is a single sequence
         # list of kmers [kmer1, kmer2, ...]
-        return [seq[i: i + k] for i in range(0, len(seq) - (k - 1), 1)]
+        return ([seq[i: i + k] for i in range(0, len(seq) - (k - 1), 1)])
 
 
+@profile
+def get_kmer_counts(seq, k=6):
+    """
+    For an input sequence, return counts for all kmers in dict keyed on kmer,
+    and its counts as the value
+
+    :type seq: str
+    :param seq: a single nucleotide sequence or a list of nucleotide sequences
+
+    :type k: int
+    :param k: length of kmers to generate, default is 6mers under the constraint that
+               length(seq) > k
+    """
+    counts = defaultdict(lambda: 0)
+    n_kmers = len(seq) - k + 1
+    try:
+        for i in range(n_kmers):
+            counts[seq[i: i + k]] += 1
+    except Exception as e:
+        print("Exception occurred: {}".format(e))
+        return
+    else:
+        return counts
+
+
+@profile
 def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", genome="22",
                     feature="CDS"):
     """
@@ -313,6 +355,7 @@ def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", gen
     return None
 
 
+@profile
 def get_start_prob(fasta_file, verbose=False):
     """
     From a list of sequences, get the background probabilities of adenine(A),
@@ -341,7 +384,8 @@ def get_start_prob(fasta_file, verbose=False):
     # helpful message about input sequences - optional
     if verbose:
         gc_content = 100 * ((bkg_freq["G"] + bkg_freq["C"]) /
-                            sum([bkg_freq["C"], bkg_freq["T"], bkg_freq["A"], bkg_freq["G"]]))
+                            sum([bkg_freq["C"], bkg_freq["T"], bkg_freq["A"],
+                                 bkg_freq["G"]]))
         print("GC content of sequences in {}: {:0.2f}%".format(fasta_file, gc_content))
 
     # calculate background probabilities
@@ -350,6 +394,7 @@ def get_start_prob(fasta_file, verbose=False):
     return start_prob
 
 
+@profile
 def get_transmat(fasta_file, n=5):
     """
     From a FASTA file, generate nth order Markov chain transition probability matrix. By
@@ -398,10 +443,21 @@ def get_transmat(fasta_file, n=5):
     return pd.DataFrame.from_dict(kmer_prob, orient="index").fillna(0.)
 
 
+@lru_cache(512)
+def _cdf(k: int, mu: float):
+    """
+    From Python3 docs - Decorator to wrap a function with a memoizing callable that saves
+    up to the maxsize most recent calls. This decreases computation time for Poisson CDF
+    function, speeding up pac()
+    """
+    return poisson.cdf(k, mu)
+
+
+@profile
 def pac(seqA: str, seqB: str):
     """
     Poisson based similarity measure, PAC. Adopted from Jacques van Helden
-    BIOINFORMATICS (2002)
+    Bioinformatics (2002)
 
     :type seqA: str
     :param seqA: Nucleotide sequence, preferably unambiguous DNA sequence
@@ -431,11 +487,15 @@ def pac(seqA: str, seqB: str):
 
     total_patterns = set(seqA_kmers + seqB_kmers)
     n_patterns = len(total_patterns)
+    sga = seqA_wc.get
+    sgb = seqB_wc.get
     for word in total_patterns:
-        Cw_AB = min([seqA_wc.get(word, 0), seqB_wc.get(word, 0)])
+        wc_seqA = sga(word, 0)
+        wc_seqB = sgb(word, 0)
+        Cw_AB = wc_seqB if wc_seqA > wc_seqB else wc_seqA
         if Cw_AB > 0:
-            prob = (1 - poisson.cdf(Cw_AB - 1, mw_A[word])) *\
-                   (1 - poisson.cdf(Cw_AB - 1, mw_B[word]))
+            prob = (1 - _cdf(Cw_AB - 1, mw_A[word])) *\
+                   (1 - _cdf(Cw_AB - 1, mw_B[word]))
         else:
             prob = 1
         try:
