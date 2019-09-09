@@ -5,12 +5,13 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 
 from sys import exit
 from os.path import isfile, abspath
 import argparse
+from random import sample
 from collections import defaultdict
 from itertools import product, starmap
 from time import localtime, strftime
@@ -27,10 +28,10 @@ try:
     import numpy as np
 except ImportError:
     err.append("numpy")
-# try:
-#     import pandas as pd
-# except ImportError:
-#     err.append("pandas")
+try:
+    import pandas as pd
+except ImportError:
+    err.append("pandas")
 # try:
 #     from sklearn.svm import SVC
 #     from sklearn.preprocessing import MaxAbsScaler
@@ -153,7 +154,7 @@ def main():
                                    fg_poisson_metrics)
 
     # collate all DNA shape values
-    print(strftime("%x %X".format(localtime)), ": Processing DNA shape data\n")
+    print(strftime("%x %X".format(localtime)), ": Processing DNA shape data")
     fg_shapes = dict()
     for shapefile in args.fg_shape_fasta_file:
         whichshape = shapefile.split(".")[-1]
@@ -174,6 +175,20 @@ def main():
                 for i in range(1, len(shape) - 1):
                     position = "{0}_pos_{1}".format(whichshape, i + 1)
                     fg_shapes[name][position] = float(shape[i])
+
+    # create dataframe of all features for positive training data
+    print(strftime("%x %X".format(localtime)), ": Creating positive training dataset\n")
+    gc_data_df = pd.DataFrame.from_dict(fg_gc[args.protein_name], orient="index",
+                                              columns=["gc_percent"])
+    pac_data_df = pd.DataFrame.from_dict(fg_pac, orient="index",
+                                              columns=["poisson_add_sim",
+                                                       "poisson_prod_sim"])
+    shapes_data_df = pd.DataFrame.from_dict(fg_shapes, orient="index")
+    positive_data_df = gc_data_df.merge(pac_data_df, how="outer",
+                                        left_index=True, right_index=True)
+    positive_data_df = positive_data_df.merge(shapes_data_df, how="outer",
+                                        left_index=True, right_index=True)
+    positive_data_df.insert(0, "seq_type", "True")
 
     ##################################
     # BACKGROUND SEQUENCE PROCESSING #
@@ -209,7 +224,7 @@ def main():
                                     bkg_poisson_metrics)
 
     # collate all DNA shape values
-    print(strftime("%x %X".format(localtime)), ": Processing DNA shape data\n")
+    print(strftime("%x %X".format(localtime)), ": Processing DNA shape data")
     bkg_shapes = dict()
     for shapefile in args.bkg_shape_fasta_file:
         whichshape = shapefile.split(".")[-1]
@@ -230,6 +245,30 @@ def main():
                 for i in range(1, len(shape) - 1):
                     position = "{0}_pos_{1}".format(whichshape, i + 1)
                     bkg_shapes[name][position] = float(shape[i])
+
+    # collect balanced dataset for training and prediction
+    print(strftime("%x %X".format(localtime)), ": Creating negative training dataset\n")
+    sample_count = len(fg_seqs[args.protein_name]["seqs"])  # number of foreground seqs
+    negative_sample_list = sample(list(bkg_seqs[args.protein_name]["header"]),
+                                  sample_count)
+    # create a dict which is subset for all features
+    gc_subset = {entry: bkg_gc[args.protein_name].get(entry, None)
+                 for entry in negative_sample_list}
+    pac_subset = {entry: bkg_pac.get(entry, None)
+                  for entry in negative_sample_list}
+    shapes_subset = {entry: bkg_shapes.get(entry, None)
+                     for entry in negative_sample_list}
+    gc_data_df = pd.DataFrame.from_dict(gc_subset, orient="index", columns=["gc_percent"])
+    pac_data_df = pd.DataFrame.from_dict(pac_subset, orient="index",
+                                         columns=["poisson_add_sim", "poisson_prod_sim"])
+    shapes_data_df = pd.DataFrame.from_dict(shapes_subset, orient="index")
+    negative_data_df = gc_data_df.merge(pac_data_df, how="outer",
+                                        left_index=True, right_index=True)
+    negative_data_df = negative_data_df.merge(shapes_data_df, how="outer",
+                                        left_index=True, right_index=True)
+    negative_data_df.insert(0, "seq_type", "Not_True")
+
+    training_data = pd.concat([positive_data_df, negative_data_df])
 
 
 if __name__ == "__main__":
