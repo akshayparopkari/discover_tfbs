@@ -5,7 +5,7 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 
 from sys import exit
@@ -35,11 +35,12 @@ except ImportError:
     err.append("pandas")
 try:
     from sklearn.svm import SVC
+    from sklearn.utils import shuffle
     from sklearn.preprocessing import MaxAbsScaler
-    from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
+    from sklearn.model_selection import GridSearchCV
+    from sklearn.model_selection import StratifiedShuffleSplit
     from sklearn.preprocessing import label_binarize
-    from sklearn.decomposition import PCA
-    from sklearn.metrics import roc_curve, auc, precision_recall_curve, f1_score, average_precision_score
+    from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_precision_score
 except ImportError:
     err.append("scikit-learn")
 try:
@@ -65,13 +66,19 @@ def handle_program_options():
     parser.add_argument("-bsff", "--bkg_shape_fasta_file", nargs="+", help="Path to 3D "
                         "DNA shape (DNAShapeR output files) data FASTA format file "
                         "associated with 'bkg_fasta_file' parameters [REQUIRED]")
-    parser.add_argument("protein_name", type=str, help="Name of transcription factor "
-                        "denoted by fasta_file parameter. Name must only contain "
-                        "alphanumeric characters [REQUIRED]")
-    parser.add_argument("-s", "--savefile", action="store_true",
-                        help="Save plots as SVG files.")
-    parser.add_argument("-o", "--output_file", action="store_true",
-                        help="Save consolidated data to this tab-separated file")
+    parser.add_argument("protein_name", type=str,
+                        choices=["bcr1", "brg1", "efg1", "ndt80", "rob1", "tec1"],
+                        help="Name of transcription factor. Please see the list of valid "
+                        "choices for this parameter [REQUIRED]")
+    parser.add_argument("-cv", "--cross_validation", type=str, default="roc",
+                        choices=["roc", "prc"],
+                        help="Specify which type pf cross validation curves to output. By"
+                        " default, ROC plots will be saved.")
+    parser.add_argument("-s", "--savefile", type=str,
+                        help="Specify location and filename to save plots as SVG files.")
+    parser.add_argument("-o", "--output_file", type=str,
+                        help="Specify location and filename to save consolidated data to "
+                        "this tab-separated file")
     return parser.parse_args()
 
 
@@ -125,7 +132,7 @@ def main():
     #######################################
     # FOREGROUND SEQUENCE PROCESSING #
     #######################################
-    print(strftime("%x %X".format(localtime)), ": Processing foreground FASTA file")
+    print("\n", strftime("%x %X".format(localtime)), ": Processing foreground FASTA file")
     print("="*52, sep="\n")
 
     # get all foreground sequences
@@ -273,33 +280,64 @@ def main():
     ############################
     # TRAINING DATA PROCESSING #
     ############################
+    print("*"*56, sep="\n")
+    print(strftime("%x %X".format(localtime)), ": Starting 10-fold corss-validation")
+    random_state = np.random.RandomState(0)
     training_data = pd.concat([positive_data_df, negative_data_df])
+    training_data = shuffle(training_data, random_state=random_state)
     X = training_data.iloc[:, 1: training_data.shape[1]].values
     y = training_data["seq_type"].values
-    y = label_binarize(y, classes=["True", "Not_True"])
+    y = np.ravel(label_binarize(y, classes=["True", "Not_True"]))
 
-    random_state = 42
-    classifier = SVC(random_state=random_state)
-    X_train, X_test, Y_train, Y_test = train_test_split(X, y, test_size=.9,
-                                                        random_state=random_state)
-    classifier.fit(X_train, y_train)
-    y_score = classifier.decision_function(X_test)
-    precision, recall, _ = precision_recall_curve(y_test, y_score)
-    with mpl.style.context("ggplot"):
-        plt.figure(figsize=(10, 10))
-        plt.step(recall, precision, color="b", alpha=1, where="post")
-        plt.fill_between(recall, precision, alpha=0.2, color="b", step="post")
-        plt.xlabel("Recall", color="k", size=16)
-        plt.ylabel("Precision", color="k", size=16)
-        plt.ylim([0.0, 1.0])
-        plt.xlim([0.0, 1.0])
-        plt.title("Average precision score for {0}: {1:0.2f}".
-                  format(args.protein_name.capitalize(),
-                  average_precision_score(y_test, y_score)))
-        outfnh = abspath("./{}_LinearSVC_PRC.pdf".format(args.protein_name))
-        plt.savefig(outfnh, dpi=300, format="pdf", bbox_inches="tight",
-                    pad_inches=0.1)
+    # tuning parameters for SVC
+    C_range = np.logspace(-10, 10, base=2)
+    param_grid = dict(C=C_range)
+    cv = StratifiedShuffleSplit(n_splits=10, test_size=0.2, random_state=random_state)
+    grid = GridSearchCV(SVC(kernel="linear"), param_grid=param_grid, cv=cv)
+    grid.fit(X, y)
+    svc = SVC(C=grid.best_params_["C"], kernel="linear", probability=True)
 
+    if args.cross_validation == "roc":
+        tprs = []
+        aucs = []
+        mean_fpr = np.linspace(0, 1, 100)
+        print(strftime("%x %X".format(localtime)), ": Plotting and saving ROC data\n")
+        with mpl.style.context("ggplot"):
+            plt.figure(figsize=(7, 7))
+            for train, test in cv.split(X, y):
+                probas_ = svc.fit(X[train], y[train]).predict_proba(X[test])
+                fpr, tpr, thresholds = roc_curve(y[test], probas_[:, 1])
+                tprs.append(np.interp(mean_fpr, fpr, tpr))
+                tprs[-1][0] = 0.0
+                roc_auc = auc(fpr, tpr)
+                aucs.append(roc_auc)
+            plt.plot([0, 1], [0, 1], linestyle="--", lw=2, color="r", label="Random",
+                     alpha=0.8)
+            mean_tpr = np.mean(tprs, axis=0)
+            mean_tpr[-1] = 1.0
+            mean_auc = auc(mean_fpr, mean_tpr)
+            std_auc = np.std(aucs)
+            plt.plot(mean_fpr, mean_tpr, color='b',lw=2, alpha=0.8,
+                     label=r'Mean ROC (AUC = {0:0.1f} $\pm$ {1:0.2f})'.format(mean_auc,
+                                                                              std_auc))
+            std_tpr = np.std(tprs, axis=0)
+            tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+            tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+            plt.fill_between(mean_fpr, tprs_lower, tprs_upper, color="b", alpha=.2,
+                             label=r"$\pm$ 1 std. dev.")
+            plt.figtext(0.35, 0.28, args.protein_name.capitalize(), color="k",
+                        fontsize=16)
+            plt.xlim([-0.05, 1.05])
+            plt.ylim([-0.05, 1.05])
+            plt.xlabel("False Positive Rate", color="k", size=12)
+            plt.ylabel("True Positive Rate", color="k", size=12)
+            plt.title("{} ROC".format(args.protein_name.capitalize()))
+            plt.legend(loc="lower right", fontsize=14)
+            plt.savefig(args.savefile, dpi=300, format="svg", bbox_inches="tight",
+                        pad_inches=0.1)
+    else:
+        # return PRC plots
+        print(strftime("%x %X".format(localtime)), ": Plotting and saving PRC data\n")
 
 if __name__ == "__main__":
     exit(main())
