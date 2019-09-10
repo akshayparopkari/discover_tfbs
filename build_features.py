@@ -5,7 +5,7 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 
 from sys import exit
@@ -18,12 +18,13 @@ from time import localtime, strftime
 from pprint import pprint
 from utils import parse_fasta, calculate_gc_percent, pac
 err = []
-# try:
-#     import matplotlib as mpl
-#     import matplotlib.pyplot as plt
-#     mpl.rc("font", family="Arial")
-# except ImportError:
-#     err.append("matplotlib")
+try:
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    plt.switch_backend('agg')
+    mpl.rc("font", family="Arial")
+except ImportError:
+    err.append("matplotlib")
 try:
     import numpy as np
 except ImportError:
@@ -32,14 +33,15 @@ try:
     import pandas as pd
 except ImportError:
     err.append("pandas")
-# try:
-#     from sklearn.svm import SVC
-#     from sklearn.preprocessing import MaxAbsScaler
-#     from sklearn.model_selection import GridSearchCV, StratifiedShuffleSplit
-#     from sklearn.decomposition import PCA
-#     from sklearn.metrics import roc_curve, auc, precision_recall_curve, f1_score, average_precision_score
-# except ImportError:
-#     err.append("scikit-learn")
+try:
+    from sklearn.svm import SVC
+    from sklearn.preprocessing import MaxAbsScaler
+    from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
+    from sklearn.preprocessing import label_binarize
+    from sklearn.decomposition import PCA
+    from sklearn.metrics import roc_curve, auc, precision_recall_curve, f1_score, average_precision_score
+except ImportError:
+    err.append("scikit-learn")
 try:
     assert len(err) == 0
 except AssertionError:
@@ -268,7 +270,35 @@ def main():
                                         left_index=True, right_index=True)
     negative_data_df.insert(0, "seq_type", "Not_True")
 
+    ############################
+    # TRAINING DATA PROCESSING #
+    ############################
     training_data = pd.concat([positive_data_df, negative_data_df])
+    X = training_data.iloc[:, 1: training_data.shape[1]].values
+    y = training_data["seq_type"].values
+    y = label_binarize(y, classes=["True", "Not_True"])
+
+    random_state = 42
+    classifier = SVC(random_state=random_state)
+    X_train, X_test, Y_train, Y_test = train_test_split(X, y, test_size=.9,
+                                                        random_state=random_state)
+    classifier.fit(X_train, y_train)
+    y_score = classifier.decision_function(X_test)
+    precision, recall, _ = precision_recall_curve(y_test, y_score)
+    with mpl.style.context("ggplot"):
+        plt.figure(figsize=(10, 10))
+        plt.step(recall, precision, color="b", alpha=1, where="post")
+        plt.fill_between(recall, precision, alpha=0.2, color="b", step="post")
+        plt.xlabel("Recall", color="k", size=16)
+        plt.ylabel("Precision", color="k", size=16)
+        plt.ylim([0.0, 1.0])
+        plt.xlim([0.0, 1.0])
+        plt.title("Average precision score for {0}: {1:0.2f}".
+                  format(args.protein_name.capitalize(),
+                  average_precision_score(y_test, y_score)))
+        outfnh = abspath("./{}_LinearSVC_PRC.pdf".format(args.protein_name))
+        plt.savefig(outfnh, dpi=300, format="pdf", bbox_inches="tight",
+                    pad_inches=0.1)
 
 
 if __name__ == "__main__":
