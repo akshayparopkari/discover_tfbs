@@ -5,7 +5,7 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 
 
 from sys import exit
@@ -36,7 +36,7 @@ except ImportError:
 try:
     from sklearn.svm import SVC
     from sklearn.utils import shuffle
-    from sklearn.preprocessing import MaxAbsScaler
+    from sklearn.model_selection import train_test_split
     from sklearn.model_selection import GridSearchCV
     from sklearn.model_selection import StratifiedShuffleSplit
     from sklearn.preprocessing import label_binarize
@@ -125,7 +125,7 @@ def main():
         assert isfile(args.bkg_fasta_file)
         # assert isfile(args.test_fasta_file)
     except AssertionError as e:
-        print("Input FASTA file(s) does not exist. Please check supplied FASTA file.\n{}"
+        print("Input FASTA file(s) does not exist. Please check supplied FASTA file - {}"
               .format(e))
         exit()
 
@@ -133,7 +133,7 @@ def main():
     # FOREGROUND SEQUENCE PROCESSING #
     #######################################
     print("\n", strftime("%x %X".format(localtime)), ": Processing foreground FASTA file")
-    print("="*52, sep="\n")
+    print("="*53, sep="\n")
 
     # get all foreground sequences
     print(strftime("%x %X".format(localtime)), ": Reading FASTA file")
@@ -257,31 +257,45 @@ def main():
 
     # collect balanced dataset for training and prediction
     print(strftime("%x %X".format(localtime)), ": Creating negative training dataset\n")
-    sample_count = len(fg_seqs[args.protein_name]["seqs"])  # number of foreground seqs
-    negative_sample_list = sample(list(bkg_seqs[args.protein_name]["header"]),
-                                  sample_count)
-    # create a dict which is subset for all features
-    gc_subset = {entry: bkg_gc[args.protein_name].get(entry, None)
-                 for entry in negative_sample_list}
-    pac_subset = {entry: bkg_pac.get(entry, None)
-                  for entry in negative_sample_list}
-    shapes_subset = {entry: bkg_shapes.get(entry, None)
+    if args.cross_validation == "roc":
+        sample_count = len(fg_seqs[args.protein_name]["seqs"])  # number of foreground seqs
+        negative_sample_list = sample(list(bkg_seqs[args.protein_name]["header"]),
+                                      sample_count)
+        # create a dict which is subset for all features
+        gc_subset = {entry: bkg_gc[args.protein_name].get(entry, None)
                      for entry in negative_sample_list}
-    gc_data_df = pd.DataFrame.from_dict(gc_subset, orient="index", columns=["gc_percent"])
-    pac_data_df = pd.DataFrame.from_dict(pac_subset, orient="index",
-                                         columns=["poisson_add_sim", "poisson_prod_sim"])
-    shapes_data_df = pd.DataFrame.from_dict(shapes_subset, orient="index")
-    negative_data_df = gc_data_df.merge(pac_data_df, how="outer",
-                                        left_index=True, right_index=True)
-    negative_data_df = negative_data_df.merge(shapes_data_df, how="outer",
-                                        left_index=True, right_index=True)
-    negative_data_df.insert(0, "seq_type", "Not_True")
+        pac_subset = {entry: bkg_pac.get(entry, None)
+                      for entry in negative_sample_list}
+        shapes_subset = {entry: bkg_shapes.get(entry, None)
+                         for entry in negative_sample_list}
+        gc_data_df = pd.DataFrame.from_dict(gc_subset, orient="index", columns=["gc_percent"])
+        pac_data_df = pd.DataFrame.from_dict(pac_subset, orient="index",
+                                             columns=["poisson_add_sim", "poisson_prod_sim"])
+        shapes_data_df = pd.DataFrame.from_dict(shapes_subset, orient="index")
+        negative_data_df = gc_data_df.merge(pac_data_df, how="outer",
+                                            left_index=True, right_index=True)
+        negative_data_df = negative_data_df.merge(shapes_data_df, how="outer",
+                                            left_index=True, right_index=True)
+        negative_data_df.insert(0, "seq_type", "Not_True")
+    else:
+        # use all background data for PRC calculations
+        gc_data_df = pd.DataFrame.from_dict(bkg_gc[args.protein_name], orient="index",
+                                            columns=["gc_percent"])
+        pac_data_df = pd.DataFrame.from_dict(bkg_pac, orient="index",
+                                             columns=["poisson_add_sim",
+                                                      "poisson_prod_sim"])
+        shapes_data_df = pd.DataFrame.from_dict(bkg_shapes, orient="index")
+        negative_data_df = gc_data_df.merge(pac_data_df, how="outer",
+                                            left_index=True, right_index=True)
+        negative_data_df = negative_data_df.merge(shapes_data_df, how="outer",
+                                            left_index=True, right_index=True)
+        negative_data_df.insert(0, "seq_type", "Not_True")
 
     ############################
     # TRAINING DATA PROCESSING #
     ############################
-    print("*"*56, sep="\n")
-    print(strftime("%x %X".format(localtime)), ": Starting 10-fold corss-validation")
+    print("*"*53, sep="\n")
+    print(strftime("%x %X".format(localtime)), ": Starting 10-fold cross-validation")
     random_state = np.random.RandomState(0)
     training_data = pd.concat([positive_data_df, negative_data_df])
     training_data = shuffle(training_data, random_state=random_state)
@@ -323,7 +337,7 @@ def main():
             std_tpr = np.std(tprs, axis=0)
             tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
             tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-            plt.fill_between(mean_fpr, tprs_lower, tprs_upper, color="b", alpha=.2,
+            plt.fill_between(mean_fpr, tprs_lower, tprs_upper, color="b", alpha=0.2,
                              label=r"$\pm$ 1 std. dev.")
             plt.figtext(0.35, 0.28, args.protein_name.capitalize(), color="k",
                         fontsize=16)
@@ -332,12 +346,40 @@ def main():
             plt.xlabel("False Positive Rate", color="k", size=12)
             plt.ylabel("True Positive Rate", color="k", size=12)
             plt.title("{} ROC".format(args.protein_name.capitalize()))
-            plt.legend(loc="lower right", fontsize=14)
-            plt.savefig(args.savefile, dpi=300, format="svg", bbox_inches="tight",
+            plt.legend(loc="lower right", fontsize=12)
+            plt.savefig(args.savefile, dpi=300, format="pdf", bbox_inches="tight",
                         pad_inches=0.1)
     else:
         # return PRC plots
         print(strftime("%x %X".format(localtime)), ": Plotting and saving PRC data\n")
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25,
+                                                            random_state=random_state)
+        svc.fit(X_train, y_train)
+        y_score = svc.decision_function(X_test)
+        precision = dict()
+        recall = dict()
+        average_precision = dict()
+        # A "micro-average": quantifying score on all classes jointly
+        precision["micro"], recall["micro"], _ = precision_recall_curve(y_test.ravel(),
+                                                                        y_score.ravel())
+        average_precision["micro"] = average_precision_score(y_test, y_score,
+                                                             average="micro")
+        with mpl.style.context("ggplot"):
+            plt.figure(figsize=(7, 7))
+            plt.step(recall["micro"], precision["micro"], color="b", alpha=1,
+                     where="post")
+            plt.fill_between(recall["micro"], precision["micro"], alpha=0.2, color="b",
+                             step="post")
+            plt.xlabel("Recall", color="k", size=12)
+            plt.ylabel("Precision", color="k", size=12)
+            plt.ylim([0.0, 1.0])
+            plt.xlim([0.0, 1.0])
+            plt.title("Average precision score for {}: {:0.2f}".
+                      format(args.protein_name.capitalize(), average_precision["micro"]))
+            plt.savefig(args.savefile, dpi=300, format="pdf", bbox_inches="tight",
+                        pad_inches=0.1)
+
 
 if __name__ == "__main__":
     exit(main())
