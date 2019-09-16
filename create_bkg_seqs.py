@@ -5,32 +5,17 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
-from sys import exit
-from os.path import isfile, abspath
 import argparse
-from random import sample
+from sys import exit
+from os import mkdir
+from os.path import isfile, join, abspath, exists
+from random import choice
 from collections import defaultdict
 from time import localtime, strftime
-from pprint import pprint
-from utils import parse_fasta, calculate_gc_percent, pac
-err = []
-try:
-    import numpy as np
-except ImportError:
-    err.append("numpy")
-try:
-    import pandas as pd
-except ImportError:
-    err.append("pandas")
-try:
-    assert len(err) == 0
-except AssertionError:
-    for error in err:
-        print("Please install {}".format(error))
-    exit()
+from utils import parse_fasta, calculate_gc_percent, get_kmers
 
 
 def handle_program_options():
@@ -46,15 +31,15 @@ def handle_program_options():
                         "format file [REQUIRED]")
     parser.add_argument("protein_name", type=str,
                         help="Name of transcription factor protein. [REQUIRED]")
-    parser.add_argument("genome_fasta_files", type=str, nargs="+",
+    parser.add_argument("-g", "--genome_fasta_files", type=str, nargs="+",
                         help="Specify path to one or more genome files to use as template"
                         " from which to generae random background sequences. These genome"
                         "file(s) must be FASTA file with very low probability of "
                         "containing sequences with binding motifs. For example, these "
-                        "files can be FASTA file of exonic regions of non-related species")
-    parser.add_argument("-o", "--output_file", type=str,
-                        help="Specify location and filename to save background sequence "
-                        "data.")
+                        "files can be FASTA file of exonic regions of non-related "
+                        "species. Please do not supply gzipped files.")
+    parser.add_argument("-o", "--output_dir", type=str,
+                        help="Specify a directory to save background sequence data.")
     return parser.parse_args()
 
 
@@ -68,14 +53,45 @@ def main():
         print("Error with input foreground FASTA file(s). Please check supplied FASTA "
               "file - {}".format(e))
         exit()
+    try:
+        outdir = abspath(args.output_dir)
+        assert exists(outdir)
+    except AssertionError:
+        # output directory doesn't exist, create it
+        mkdir(outdir)
 
-    # generate random length matched sequences
-    print("\n", strftime("%x %X".format(localtime)),
-          ": Generating random length-matched sequences")
-    print("="*63, sep="\n")
+    #########################################################
+    # GC% AND LENGTH MATCHED BACKGROUND SEQUENCE GENERATION #
+    #########################################################
+    print("\n", strftime("%x %H:%M: ".format(localtime)),
+          "Generating random length-matched sequences")
+    print("="*60, sep="\n")
     fg_seqs = {header: seq for header, seq in parse_fasta(args.fg_fasta_file)}
     seq_length = len(list(fg_seqs.values())[0])
-    print(fg_seqs, seq_length, sep="\n\n")
+    fg_gc = {header: round(calculate_gc_percent(seq)) for header, seq in fg_seqs.items()}
+
+    # parse genome CDS/exonic regions and collect GC% and length-matched sequences
+    cds_exons_len_matched_gc = defaultdict(list)
+    for f in args.genome_fasta_files:
+        for header, seq in parse_fasta(f):
+            for kmer in get_kmers(seq, k=seq_length):
+                gc_content = round(calculate_gc_percent(kmer))
+                dict_key = "gc_{:d}_pc".format(gc_content)
+                cds_exons_len_matched_gc[dict_key].append(kmer)
+
+    # write to output FASTA file
+    outfnh = join(outdir,
+                  "{}_cds_exon_len_matched_bkg_seqs.fasta".format(args.protein_name))
+    with open(outfnh, "w") as outf:
+        for header, gc_pc in fg_gc.items():
+            random_header = "gc_len_matched_bkg_for_{}".format(header)
+            dict_key = "gc_{:d}_pc".format(gc_pc)
+            random_seq = choice(cds_exons_len_matched_gc[dict_key])
+            outf.write(">{0}\n{1}\n".format(random_header, random_seq))
+
+    ########################################################
+    # DINUCLEOTIDE SHUFFLED BACKGROUND SEQUENCE GENERATION #
+    ########################################################
 
 
 
