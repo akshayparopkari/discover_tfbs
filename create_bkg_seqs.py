@@ -5,7 +5,7 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.6"
+__version__ = "0.1.0"
 
 
 from sys import exit
@@ -13,7 +13,6 @@ from os.path import isfile, abspath
 import argparse
 from random import sample
 from collections import defaultdict
-from itertools import product, starmap
 from time import localtime, strftime
 from pprint import pprint
 from utils import parse_fasta, calculate_gc_percent, pac
@@ -42,19 +41,41 @@ def handle_program_options():
         "keep dinucleotide composition constant.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
-    parser.add_argument("fg_fasta_file", help="Path to foreground/true positive sequence "
-                        "dataset FASTA format file [REQUIRED]")
+    parser.add_argument("fg_fasta_file", type=str,
+                        help="Path to foreground/true positive sequence dataset FASTA "
+                        "format file [REQUIRED]")
     parser.add_argument("protein_name", type=str,
-                        help="Name of transcription factor. Please see the list of valid "
-                        "choices for this parameter [REQUIRED]")
+                        help="Name of transcription factor protein. [REQUIRED]")
+    parser.add_argument("genome_fasta_files", type=str, nargs="+",
+                        help="Specify path to one or more genome files to use as template"
+                        " from which to generae random background sequences. These genome"
+                        "file(s) must be FASTA file with very low probability of "
+                        "containing sequences with binding motifs. For example, these "
+                        "files can be FASTA file of exonic regions of non-related species")
     parser.add_argument("-o", "--output_file", type=str,
-                        help="Specify location and filename to save consolidated data to "
-                        "this tab-separated file")
+                        help="Specify location and filename to save background sequence "
+                        "data.")
     return parser.parse_args()
 
 
+def main():
 
+    args = handle_program_options()
 
+    try:
+        assert isfile(args.fg_fasta_file)
+    except AssertionError as e:
+        print("Error with input foreground FASTA file(s). Please check supplied FASTA "
+              "file - {}".format(e))
+        exit()
+
+    # generate random length matched sequences
+    print("\n", strftime("%x %X".format(localtime)),
+          ": Generating random length-matched sequences")
+    print("="*63, sep="\n")
+    fg_seqs = {header: seq for header, seq in parse_fasta(args.fg_fasta_file)}
+    seq_length = len(list(fg_seqs.values())[0])
+    print(fg_seqs, seq_length, sep="\n\n")
 
 
 
