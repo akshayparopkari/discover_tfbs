@@ -92,6 +92,8 @@ def main():
     ########################################################
     # DINUCLEOTIDE SHUFFLED BACKGROUND SEQUENCE GENERATION #
     ########################################################
+    for header, seq in parse_fasta(args.fg_fasta_file):
+        dinuc_shuff_header = "dinucleotide_shuffled_bkg_seq_for_{}".format(header)
 
 
 
