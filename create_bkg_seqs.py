@@ -5,17 +5,23 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 
 import argparse
 from sys import exit
 from os import mkdir
 from os.path import isfile, join, abspath, exists
-from random import choice
+from random import choice, choices
+from itertools import accumulate, product
 from collections import defaultdict
 from time import localtime, strftime
 from utils import parse_fasta, calculate_gc_percent, get_kmers
+try:
+    import numpy as np
+    from hmmlearn.hmm import MultinomialHMM
+except ImportError as err:
+    exit("Please install missing package - {}".format(err))
 
 
 def handle_program_options():
@@ -63,7 +69,7 @@ def main():
     #########################################################
     # GC% AND LENGTH MATCHED BACKGROUND SEQUENCE GENERATION #
     #########################################################
-    print("\n", strftime("%x %H:%M: ".format(localtime)),
+    print(strftime("\n%x %H:%M: ".format(localtime)),
           "Generating random length-matched sequences")
     print("="*60, sep="\n")
     fg_seqs = {header: seq for header, seq in parse_fasta(args.fg_fasta_file)}
@@ -92,9 +98,17 @@ def main():
     ########################################################
     # DINUCLEOTIDE SHUFFLED BACKGROUND SEQUENCE GENERATION #
     ########################################################
+    random_state = np.random.RandomState(0)
+    k = 2
+    all_dinuc_combination = {"".join(list(entry)) for entry in product("ATGC", repeat=2)}
+    start_cnt_prior = defaultdict(int)
+    trans_mat_prior = defaultdict(lambda: defaultdict(int))
     for header, seq in parse_fasta(args.fg_fasta_file):
         dinuc_shuff_header = "dinucleotide_shuffled_bkg_seq_for_{}".format(header)
-
+        start_cnt_prior[seq[: 2]] += 1
+        for i in range(0, seq_length - k):
+            trans_mat_prior[seq[i: i + k]][seq[i + 1: i + k + 1]] += 1
+        
 
 
 if __name__ == "__main__":
