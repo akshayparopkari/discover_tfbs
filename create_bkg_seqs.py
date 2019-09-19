@@ -12,7 +12,7 @@ import argparse
 from sys import exit
 from os import mkdir
 from os.path import isfile, join, abspath, exists
-from random import choice, choices
+from random import choices
 from itertools import accumulate, product
 from collections import defaultdict
 from time import localtime, strftime
@@ -100,15 +100,48 @@ def main():
     ########################################################
     random_state = np.random.RandomState(0)
     k = 2
-    all_dinuc_combination = {"".join(list(entry)) for entry in product("ATGC", repeat=2)}
-    start_cnt_prior = defaultdict(int)
-    trans_mat_prior = defaultdict(lambda: defaultdict(int))
+    all_dinuc_combination = {"".join(list(entry)): 0
+                             for entry in product("ATGC", repeat=2)}
+    trans_mat = {key: {nuc: 0 for nuc in "ATGC"} for key in all_dinuc_combination.keys()}
+    dinuc_freq = defaultdict(int)
+    prior_nuc_prob = {nuc: 0 for nuc in "ATGC"}
+    num_seq = 0
+    dinuc_shuff_header = set()
     for header, seq in parse_fasta(args.fg_fasta_file):
-        dinuc_shuff_header = "dinucleotide_shuffled_bkg_seq_for_{}".format(header)
-        start_cnt_prior[seq[: 2]] += 1
+        dinuc_shuff_header.add()"dinucleotide_shuffled_bkg_seq_for_{}".format(header))
+        num_seq += 1
+        for twomer in get_kmers(seq):
+            dinuc_freq[twomer] += 1
         for i in range(0, seq_length - k):
-            trans_mat_prior[seq[i: i + k]][seq[i + 1: i + k + 1]] += 1
-        
+            try: 
+                first_two = seq[i: i + k] 
+                third = seq[i + k + 1] 
+            except IndexError: 
+                first_two = seq[i: i + k] 
+                third = seq[-1] 
+            trans_mat[first_two][third] += 1
+    dinuc_prob = {k: v / sum(dinuc_freq.values()) for k, v in dinuc_freq.items()}
+    trans_mat_prob = defaultdict(lambda: defaultdict(int))
+    for dinuc, data in trans_mat.items(): 
+         for third, freq in data.items(): 
+             numerator = trans_mat[dinuc][third] + (dinuc_prob[dinuc] * 8) 
+             denominator = 8 * sum(dinuc_freq.values()) 
+             trans_mat_prob[dinuc][third] = numerator / denominator
+
+    markov_model_seqs = set()
+    for _ in range(num_seq):
+        sample = choices(list(dinuc_prob.keys()), weights=list(dinuc_prob.values()))[0]
+        for _ in range(seq_length):
+            markov_state = sample[-2:]
+            sample += choices(population=list(trans_mat_prob.keys()),
+                              weights=list(trans_mat_prob.values()))[0]
+        markov_model_seqs.add(sample)
+
+    outfnh = join(outdir,
+                  "{}_markovmodel_len_matched_bkg_seqs.fasta".format(args.protein_name))
+    with open(outfnh, "w") as outf:
+        for header, seq in zip(dinuc_shuff_header, markov_model_seqs):
+            outf.write(">{0}\n{1}\n".format(header, seq))
 
 
 if __name__ == "__main__":
