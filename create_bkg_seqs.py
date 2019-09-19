@@ -13,15 +13,10 @@ from sys import exit
 from os import mkdir
 from os.path import isfile, join, abspath, exists
 from random import choices
-from itertools import accumulate, product
+from itertools import product
 from collections import defaultdict
 from time import localtime, strftime
 from utils import parse_fasta, calculate_gc_percent, get_kmers
-try:
-    import numpy as np
-    from hmmlearn.hmm import MultinomialHMM
-except ImportError as err:
-    exit("Please install missing package - {}".format(err))
 
 
 def handle_program_options():
@@ -69,9 +64,8 @@ def main():
     #########################################################
     # GC% AND LENGTH MATCHED BACKGROUND SEQUENCE GENERATION #
     #########################################################
-    print(strftime("\n%x %H:%M: ".format(localtime)),
-          "Generating random length-matched sequences")
-    print("="*60, sep="\n")
+    print(strftime("\n%x %H:%M:".format(localtime)),
+          "Generating random length-matched background sequences from CDS/exonic regions")
     fg_seqs = {header: seq for header, seq in parse_fasta(args.fg_fasta_file)}
     seq_length = len(list(fg_seqs.values())[0])
     fg_gc = {header: round(calculate_gc_percent(seq)) for header, seq in fg_seqs.items()}
@@ -92,49 +86,52 @@ def main():
         for header, gc_pc in fg_gc.items():
             random_header = "gc_len_matched_bkg_for_{}".format(header)
             dict_key = "gc_{:d}_pc".format(gc_pc)
-            random_seq = choice(cds_exons_len_matched_gc[dict_key])
+            random_seq = choices(cds_exons_len_matched_gc[dict_key])[0]
             outf.write(">{0}\n{1}\n".format(random_header, random_seq))
 
     ########################################################
     # DINUCLEOTIDE SHUFFLED BACKGROUND SEQUENCE GENERATION #
     ########################################################
-    random_state = np.random.RandomState(0)
+    print(strftime("\n%x %H:%M:".format(localtime)),
+          "Generating length-matched background sequences using 2nd order Markov model")
     k = 2
     all_dinuc_combination = {"".join(list(entry)): 0
                              for entry in product("ATGC", repeat=2)}
     trans_mat = {key: {nuc: 0 for nuc in "ATGC"} for key in all_dinuc_combination.keys()}
     dinuc_freq = defaultdict(int)
-    prior_nuc_prob = {nuc: 0 for nuc in "ATGC"}
     num_seq = 0
     dinuc_shuff_header = set()
     for header, seq in parse_fasta(args.fg_fasta_file):
-        dinuc_shuff_header.add()"dinucleotide_shuffled_bkg_seq_for_{}".format(header))
+        dinuc_shuff_header.add("dinucleotide_shuffled_bkg_seq_for_{}".format(header))
         num_seq += 1
-        for twomer in get_kmers(seq):
+        for twomer in get_kmers(seq, k=k):
             dinuc_freq[twomer] += 1
         for i in range(0, seq_length - k):
-            try: 
-                first_two = seq[i: i + k] 
-                third = seq[i + k + 1] 
-            except IndexError: 
-                first_two = seq[i: i + k] 
-                third = seq[-1] 
+            try:
+                first_two = seq[i: i + k]
+                third = seq[i + k + 1]
+            except IndexError:
+                first_two = seq[i: i + k]
+                third = seq[-1]
             trans_mat[first_two][third] += 1
     dinuc_prob = {k: v / sum(dinuc_freq.values()) for k, v in dinuc_freq.items()}
     trans_mat_prob = defaultdict(lambda: defaultdict(int))
-    for dinuc, data in trans_mat.items(): 
-         for third, freq in data.items(): 
-             numerator = trans_mat[dinuc][third] + (dinuc_prob[dinuc] * 8) 
-             denominator = 8 * sum(dinuc_freq.values()) 
-             trans_mat_prob[dinuc][third] = numerator / denominator
+    for dinuc, data in trans_mat.items():
+        for third, freq in data.items():
+            try:
+                numerator = trans_mat[dinuc][third] + (dinuc_prob[dinuc] * 8)
+                denominator = 8 * sum(dinuc_freq.values())
+                trans_mat_prob[dinuc][third] = numerator / denominator
+            except Exception as err:
+                exit(err)
 
     markov_model_seqs = set()
     for _ in range(num_seq):
         sample = choices(list(dinuc_prob.keys()), weights=list(dinuc_prob.values()))[0]
         for _ in range(seq_length):
             markov_state = sample[-2:]
-            sample += choices(population=list(trans_mat_prob.keys()),
-                              weights=list(trans_mat_prob.values()))[0]
+            sample += choices(population=list(trans_mat_prob[markov_state].keys()),
+                              weights=list(trans_mat_prob[markov_state].values()))[0]
         markov_model_seqs.add(sample)
 
     outfnh = join(outdir,
