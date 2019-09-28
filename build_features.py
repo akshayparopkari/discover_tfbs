@@ -5,17 +5,16 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 
 
-from sys import exit
-from os.path import isfile, abspath
 import argparse
+from sys import exit
 from random import sample
 from collections import defaultdict
-from itertools import product, starmap
+from os.path import isfile, abspath
 from time import localtime, strftime
-from pprint import pprint
+from itertools import product, starmap
 from utils import parse_fasta, calculate_gc_percent, pac
 err = []
 try:
@@ -40,7 +39,8 @@ try:
     from sklearn.model_selection import GridSearchCV
     from sklearn.model_selection import StratifiedShuffleSplit
     from sklearn.preprocessing import label_binarize
-    from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_precision_score
+    from sklearn.metrics import roc_curve, auc, precision_recall_curve,\
+        average_precision_score
 except ImportError:
     err.append("scikit-learn")
 try:
@@ -54,8 +54,7 @@ except AssertionError:
 def handle_program_options():
     parser = argparse.ArgumentParser(
         description="Build feature table from input FASTA files.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-        )
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("fg_fasta_file", help="Path to foreground/true positive sequence "
                         "dataset FASTA format file [REQUIRED]")
     parser.add_argument("bkg_fasta_file", help="Path to background/negative sequence "
@@ -133,7 +132,7 @@ def main():
     # FOREGROUND SEQUENCE PROCESSING #
     #######################################
     print("\n", strftime("%x %X".format(localtime)), ": Processing foreground FASTA file")
-    print("="*53, sep="\n")
+    print("=" * 53, sep="\n")
 
     # get all foreground sequences
     print(strftime("%x %X".format(localtime)), ": Reading FASTA file")
@@ -188,22 +187,21 @@ def main():
     # create dataframe of all features for positive training data
     print(strftime("%x %X".format(localtime)), ": Creating positive training dataset\n")
     gc_data_df = pd.DataFrame.from_dict(fg_gc[args.protein_name], orient="index",
-                                              columns=["gc_percent"])
+                                        columns=["gc_percent"])
     pac_data_df = pd.DataFrame.from_dict(fg_pac, orient="index",
-                                              columns=["poisson_add_sim",
-                                                       "poisson_prod_sim"])
+                                         columns=["poisson_add_sim", "poisson_prod_sim"])
     shapes_data_df = pd.DataFrame.from_dict(fg_shapes, orient="index")
     positive_data_df = gc_data_df.merge(pac_data_df, how="outer",
                                         left_index=True, right_index=True)
     positive_data_df = positive_data_df.merge(shapes_data_df, how="outer",
-                                        left_index=True, right_index=True)
+                                              left_index=True, right_index=True)
     positive_data_df.insert(0, "seq_type", "True")
 
     ##################################
     # BACKGROUND SEQUENCE PROCESSING #
     ##################################
     print(strftime("%x %X".format(localtime)), ": Processing background FASTA file")
-    print("="*52, sep="\n")
+    print("=" * 52, sep="\n")
 
     # get all background sequences
     print(strftime("%x %X".format(localtime)), ": Reading FASTA file")
@@ -258,7 +256,7 @@ def main():
     # collect balanced dataset for training and prediction
     print(strftime("%x %X".format(localtime)), ": Creating negative training dataset\n")
     if args.cross_validation == "roc":
-        sample_count = len(fg_seqs[args.protein_name]["seqs"])  # number of foreground seqs
+        sample_count = len(fg_seqs[args.protein_name]["seqs"])  # number of fg seqs
         negative_sample_list = sample(list(bkg_seqs[args.protein_name]["header"]),
                                       sample_count)
         # create a dict which is subset for all features
@@ -268,14 +266,16 @@ def main():
                       for entry in negative_sample_list}
         shapes_subset = {entry: bkg_shapes.get(entry, None)
                          for entry in negative_sample_list}
-        gc_data_df = pd.DataFrame.from_dict(gc_subset, orient="index", columns=["gc_percent"])
+        gc_data_df = pd.DataFrame.from_dict(gc_subset, orient="index",
+                                            columns=["gc_percent"])
         pac_data_df = pd.DataFrame.from_dict(pac_subset, orient="index",
-                                             columns=["poisson_add_sim", "poisson_prod_sim"])
+                                             columns=["poisson_add_sim",
+                                                      "poisson_prod_sim"])
         shapes_data_df = pd.DataFrame.from_dict(shapes_subset, orient="index")
         negative_data_df = gc_data_df.merge(pac_data_df, how="outer",
                                             left_index=True, right_index=True)
         negative_data_df = negative_data_df.merge(shapes_data_df, how="outer",
-                                            left_index=True, right_index=True)
+                                                  left_index=True, right_index=True)
         negative_data_df.insert(0, "seq_type", "Not_True")
     else:
         # use all background data for PRC calculations
@@ -288,13 +288,13 @@ def main():
         negative_data_df = gc_data_df.merge(pac_data_df, how="outer",
                                             left_index=True, right_index=True)
         negative_data_df = negative_data_df.merge(shapes_data_df, how="outer",
-                                            left_index=True, right_index=True)
+                                                  left_index=True, right_index=True)
         negative_data_df.insert(0, "seq_type", "Not_True")
 
     ############################
     # TRAINING DATA PROCESSING #
     ############################
-    print("*"*53, sep="\n")
+    print("*" * 53, sep="\n")
     print(strftime("%x %X".format(localtime)), ": Starting 10-fold cross-validation")
     random_state = np.random.RandomState(0)
     training_data = pd.concat([positive_data_df, negative_data_df])
@@ -331,7 +331,7 @@ def main():
             mean_tpr[-1] = 1.0
             mean_auc = auc(mean_fpr, mean_tpr)
             std_auc = np.std(aucs)
-            plt.plot(mean_fpr, mean_tpr, color='b',lw=2, alpha=0.8,
+            plt.plot(mean_fpr, mean_tpr, color='b', lw=2, alpha=0.8,
                      label=r'Mean ROC (AUC = {0:0.1f} $\pm$ {1:0.2f})'.format(mean_auc,
                                                                               std_auc))
             std_tpr = np.std(tprs, axis=0)

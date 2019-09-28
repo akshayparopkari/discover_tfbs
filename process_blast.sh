@@ -42,7 +42,7 @@ echo -e "$(date "+%a %D %r"): Getting 1000bp flanking interval around TFBS"
 flankBed -i "$OUTFILE" -g "$GENOMEFILE" -b 1000 -s -header > "$FLANKEDFILE"
 if [[ -d "$FOLDERNAME" ]]
 then
-  mv "$FLANKEDFILE" "$FOLDERNAME" 
+  mv "$FLANKEDFILE" "$FOLDERNAME"
 else
   mkdir -p "$FOLDERNAME"
   mv "$FLANKEDFILE" "$FOLDERNAME"

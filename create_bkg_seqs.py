@@ -24,8 +24,7 @@ def handle_program_options():
         "Background sequences will be generated firstly by matching foreground motif "
         "GC-percent and length. Secondly, the foregound sequences will be shuffled to "
         "keep dinucleotide composition constant.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-        )
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("fg_fasta_file", type=str,
                         help="Path to foreground/true positive sequence dataset FASTA "
                         "format file [REQUIRED]")
@@ -72,7 +71,7 @@ def computeCountAndLists(s):
     nuclCnt[s[0]] = 1
     nuclTotal = 1
     dinuclTotal = 0
-    for i in range(len(s)-1):
+    for i in range(len(s) - 1):
         x = s[i]
         y = s[i + 1]
         List[x].append(y)
@@ -81,7 +80,7 @@ def computeCountAndLists(s):
         dinuclCnt[x][y] += 1
         dinuclTotal += 1
     assert (nuclTotal == len(s))
-    assert (dinuclTotal == len(s)-1)
+    assert (dinuclTotal == len(s) - 1)
     return nuclCnt, dinuclCnt, List
 
 
@@ -97,11 +96,11 @@ def chooseEdge(x, dinuclCnt):
         dinuclCnt[x]["A"] -= 1
         return "A"
     numerator += dinuclCnt[x]["C"]
-    if z < float(numerator)/float(denom):
+    if z < float(numerator) / float(denom):
         dinuclCnt[x]["C"] -= 1
         return "C"
     numerator += dinuclCnt[x]["G"]
-    if z < float(numerator)/float(denom):
+    if z < float(numerator) / float(denom):
         dinuclCnt[x]["G"] -= 1
         return "G"
     dinuclCnt[x]["T"] -= 1
@@ -157,11 +156,11 @@ def eulerian(s):
 def shuffleEdgeList(L):
     n = len(L)
     barrier = n
-    for i in range(n-1):
+    for i in range(n - 1):
         z = int(random() * barrier)
         tmp = L[z]
-        L[z] = L[barrier-1]
-        L[barrier-1] = tmp
+        L[z] = L[barrier - 1]
+        L[barrier - 1] = tmp
         barrier -= 1
     return L
 
