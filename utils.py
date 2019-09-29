@@ -23,10 +23,6 @@ try:
 except ImportError:
     err.add("pandas")
 try:
-    import numpy as np
-except ImportError:
-    err.add("numpy")
-try:
     from scipy.stats import poisson
 except ImportError:
     err.add("scipy")
