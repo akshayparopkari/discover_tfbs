@@ -1,0 +1,290 @@
+
+# ROC curves
+python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs.fasta bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fsff fg_seqs_shape/tec1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*tec1* -cv roc -s tec1_LinearSVC_ROC.pdf
+python discover_tfbs/build_features.py fg_seqs/bcr1_fg_seqs.fasta bkg_seqs/bcr1_all_bkg_combined.fasta bcr1 -fsff fg_seqs_shape/bcr1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*bcr1* -cv roc -s bcr1_LinearSVC_ROC.pdf
+python discover_tfbs/build_features.py fg_seqs/brg1_fg_seqs.fasta bkg_seqs/brg1_all_bkg_combined.fasta brg1 -fsff fg_seqs_shape/brg1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*brg1* -cv roc -s brg1_LinearSVC_ROC.pdf
+python discover_tfbs/build_features.py fg_seqs/efg1_fg_seqs.fasta bkg_seqs/efg1_all_bkg_combined.fasta efg1 -fsff fg_seqs_shape/efg1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*efg1* -cv roc -s efg1_LinearSVC_ROC.pdf
+python discover_tfbs/build_features.py fg_seqs/ndt80_fg_seqs.fasta bkg_seqs/ndt80_all_bkg_combined.fasta ndt80 -fsff fg_seqs_shape/ndt80_fg_seqs.fasta.* -bsff bkg_seqs_shape/*ndt80* -cv roc -s ndt80_LinearSVC_ROC.pdf
+python discover_tfbs/build_features.py fg_seqs/rob1_fg_seqs.fasta bkg_seqs/rob1_all_bkg_combined.fasta rob1 -fsff fg_seqs_shape/rob1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*rob1* -cv roc -s rob1_LinearSVC_ROC.pdf
+
+
+# PRC curves
+python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs.fasta bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fsff fg_seqs_shape/tec1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*tec1* -cv prc -s tec1_LinearSVC_PRC.pdf
+python discover_tfbs/build_features.py fg_seqs/bcr1_fg_seqs.fasta bkg_seqs/bcr1_all_bkg_combined.fasta bcr1 -fsff fg_seqs_shape/bcr1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*bcr1* -cv prc -s bcr1_LinearSVC_PRC.pdf
+python discover_tfbs/build_features.py fg_seqs/brg1_fg_seqs.fasta bkg_seqs/brg1_all_bkg_combined.fasta brg1 -fsff fg_seqs_shape/brg1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*brg1* -cv prc -s brg1_LinearSVC_PRC.pdf
+python discover_tfbs/build_features.py fg_seqs/efg1_fg_seqs.fasta bkg_seqs/efg1_all_bkg_combined.fasta efg1 -fsff fg_seqs_shape/efg1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*efg1* -cv prc -s efg1_LinearSVC_PRC.pdf
+python discover_tfbs/build_features.py fg_seqs/ndt80_fg_seqs.fasta bkg_seqs/ndt80_all_bkg_combined.fasta ndt80 -fsff fg_seqs_shape/ndt80_fg_seqs.fasta.* -bsff bkg_seqs_shape/*ndt80* -cv prc -s ndt80_LinearSVC_PRC.pdf
+python discover_tfbs/build_features.py fg_seqs/rob1_fg_seqs.fasta bkg_seqs/rob1_all_bkg_combined.fasta rob1 -fsff fg_seqs_shape/rob1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*rob1* -cv prc -s rob1_LinearSVC_PRC.pdf
+
+
+
+###############
+# Oct. 1 2019
+###############
+
+# build background features
+python discover_tfbs/create_bkg_seqs.py fg_seqs/tec1_fg_seqs.fasta tec1 -g non_candida_genome_files/C_albicans_SC5314_A22_current_default_coding.fasta non_candida_genome_files/dmel-all-exon-r6.29.fasta non_candida_genome_files/GCF_000005845.2_ASM584v2_cds_from_genomic.fna -o new_bkg_seqs/
+
+10/01/19 09:23: Generating random length-matched background sequences from CDS/exonic regions
+
+10/01/19 09:25: Generating length-matched shuffled sequences from foreground sequences
+
+
+python discover_tfbs/create_bkg_seqs.py fg_seqs/bcr1_fg_seqs.fasta bcr1 -g non_candida_genome_files/C_albicans_SC5314_A22_current_default_coding.fasta non_candida_genome_files/dmel-all-exon-r6.29.fasta non_candida_genome_files/GCF_000005845.2_ASM584v2_cds_from_genomic.fna -o new_bkg_seqs/
+
+10/01/19 09:38: Generating random length-matched background sequences from CDS/exonic regions
+
+10/01/19 09:40: Generating length-matched shuffled sequences from foreground sequences
+
+
+python discover_tfbs/create_bkg_seqs.py fg_seqs/brg1_fg_seqs.fasta brg1 -g non_candida_genome_files/C_albicans_SC5314_A22_current_default_coding.fasta non_candida_genome_files/dmel-all-exon-r6.29.fasta non_candida_genome_files/GCF_000005845.2_ASM584v2_cds_from_genomic.fna -o new_bkg_seqs/
+
+10/01/19 09:41: Generating random length-matched background sequences from CDS/exonic regions
+
+10/01/19 09:43: Generating length-matched shuffled sequences from foreground sequences
+
+
+python discover_tfbs/create_bkg_seqs.py fg_seqs/efg1_fg_seqs.fasta efg1 -g non_candida_genome_files/C_albicans_SC5314_A22_current_default_coding.fasta non_candida_genome_files/dmel-all-exon-r6.29.fasta non_candida_genome_files/GCF_000005845.2_ASM584v2_cds_from_genomic.fna -o new_bkg_seqs/
+
+10/01/19 09:44: Generating random length-matched background sequences from CDS/exonic regions
+
+10/01/19 09:46: Generating length-matched shuffled sequences from foreground sequences
+
+
+python discover_tfbs/create_bkg_seqs.py fg_seqs/rob1_fg_seqs.fasta rob1 -g non_candida_genome_files/C_albicans_SC5314_A22_current_default_coding.fasta non_candida_genome_files/dmel-all-exon-r6.29.fasta non_candida_genome_files/GCF_000005845.2_ASM584v2_cds_from_genomic.fna -o new_bkg_seqs/
+
+10/01/19 09:48: Generating random length-matched background sequences from CDS/exonic regions
+
+10/01/19 09:50: Generating length-matched shuffled sequences from foreground sequences
+
+
+python discover_tfbs/create_bkg_seqs.py fg_seqs/ndt80_fg_seqs.fasta ndt80 -g non_candida_genome_files/C_albicans_SC5314_A22_current_default_coding.fasta non_candida_genome_files/dmel-all-exon-r6.29.fasta non_candida_genome_files/GCF_000005845.2_ASM584v2_cds_from_genomic.fna -o new_bkg_seqs/
+
+10/01/19 09:54: Generating random length-matched background sequences from CDS/exonic regions
+
+10/01/19 09:56: Generating length-matched shuffled sequences from foreground sequences
+
+
+# build feature tables
+
+python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs.fasta new_bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fsff fg_seqs_shape/tec1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/tec1_all_bkg_combined.fasta.* -cv roc -s tec1_new_LinearSVC_ROC.pdf
+
+ 10/01/19 11:35:02 : Processing foreground FASTA file
+=====================================================
+10/01/19 11:35:02 : Reading FASTA file
+10/01/19 11:35:02 : Calculating GC percent
+10/01/19 11:35:02 : Calculating Poisson based metrics
+10/01/19 11:35:02 : Processing DNA shape data
+10/01/19 11:35:02 : Creating positive training dataset
+
+10/01/19 11:35:02 : Processing background FASTA file
+====================================================
+10/01/19 11:35:02 : Reading FASTA file
+10/01/19 11:35:02 : Calculating GC percent
+10/01/19 11:35:02 : Calculating Poisson based metrics
+10/01/19 11:35:03 : Processing DNA shape data
+10/01/19 11:35:03 : Creating negative training dataset
+
+*****************************************************
+10/01/19 11:35:03 : Starting 10-fold cross-validation
+10/01/19 11:35:05 : Plotting and saving ROC data
+
+
+python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs.fasta new_bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fsff fg_seqs_shape/tec1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/tec1_all_bkg_combined.fasta.* -cv prc -s tec1_new_LinearSVC_PRC.pdf
+
+ 10/01/19 11:38:25 : Processing foreground FASTA file
+=====================================================
+10/01/19 11:38:25 : Reading FASTA file
+10/01/19 11:38:25 : Calculating GC percent
+10/01/19 11:38:25 : Calculating Poisson based metrics
+10/01/19 11:38:25 : Processing DNA shape data
+10/01/19 11:38:25 : Creating positive training dataset
+
+10/01/19 11:38:25 : Processing background FASTA file
+====================================================
+10/01/19 11:38:25 : Reading FASTA file
+10/01/19 11:38:25 : Calculating GC percent
+10/01/19 11:38:25 : Calculating Poisson based metrics
+10/01/19 11:38:26 : Processing DNA shape data
+10/01/19 11:38:26 : Creating negative training dataset
+
+*****************************************************
+10/01/19 11:38:26 : Starting 10-fold cross-validation
+10/01/19 11:38:29 : Plotting and saving PRC data
+
+
+
+python discover_tfbs/build_features.py fg_seqs/bcr1_fg_seqs.fasta new_bkg_seqs/bcr1_all_bkg_combined.fasta bcr1 -fsff fg_seqs_shape/bcr1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/bcr1_all_bkg_combined.fasta.* -cv roc -s bcr1_new_LinearSVC_ROC.pdf
+
+ 10/01/19 11:42:45 : Processing foreground FASTA file
+=====================================================
+10/01/19 11:42:45 : Reading FASTA file
+10/01/19 11:42:45 : Calculating GC percent
+10/01/19 11:42:45 : Calculating Poisson based metrics
+10/01/19 11:42:45 : Processing DNA shape data
+10/01/19 11:42:45 : Creating positive training dataset
+
+10/01/19 11:42:45 : Processing background FASTA file
+====================================================
+10/01/19 11:42:45 : Reading FASTA file
+10/01/19 11:42:45 : Calculating GC percent
+10/01/19 11:42:45 : Calculating Poisson based metrics
+10/01/19 11:42:46 : Processing DNA shape data
+10/01/19 11:42:46 : Creating negative training dataset
+
+*****************************************************
+10/01/19 11:42:46 : Starting 10-fold cross-validation
+10/01/19 11:42:51 : Plotting and saving ROC data
+
+
+python discover_tfbs/build_features.py fg_seqs/bcr1_fg_seqs.fasta new_bkg_seqs/bcr1_all_bkg_combined.fasta bcr1 -fsff fg_seqs_shape/bcr1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/bcr1_all_bkg_combined.fasta.* -cv prc -s bcr1_new_LinearSVC_PRC.pdf
+
+ 10/01/19 11:43:51 : Processing foreground FASTA file
+=====================================================
+10/01/19 11:43:51 : Reading FASTA file
+10/01/19 11:43:51 : Calculating GC percent
+10/01/19 11:43:51 : Calculating Poisson based metrics
+10/01/19 11:43:51 : Processing DNA shape data
+10/01/19 11:43:51 : Creating positive training dataset
+
+10/01/19 11:43:51 : Processing background FASTA file
+====================================================
+10/01/19 11:43:51 : Reading FASTA file
+10/01/19 11:43:51 : Calculating GC percent
+10/01/19 11:43:51 : Calculating Poisson based metrics
+10/01/19 11:43:52 : Processing DNA shape data
+10/01/19 11:43:52 : Creating negative training dataset
+
+*****************************************************
+10/01/19 11:43:52 : Starting 10-fold cross-validation
+10/01/19 11:43:57 : Plotting and saving PRC data
+
+
+
+python discover_tfbs/build_features.py fg_seqs/brg1_fg_seqs.fasta new_bkg_seqs/brg1_all_bkg_combined.fasta brg1 -fsff fg_seqs_shape/brg1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/brg1_all_bkg_combined.fasta.* -cv roc -s brg1_new_LinearSVC_ROC.pdf
+
+ 10/01/19 11:45:43 : Processing foreground FASTA file
+=====================================================
+10/01/19 11:45:43 : Reading FASTA file
+10/01/19 11:45:43 : Calculating GC percent
+10/01/19 11:45:43 : Calculating Poisson based metrics
+10/01/19 11:45:43 : Processing DNA shape data
+10/01/19 11:45:43 : Creating positive training dataset
+
+10/01/19 11:45:43 : Processing background FASTA file
+====================================================
+10/01/19 11:45:43 : Reading FASTA file
+10/01/19 11:45:43 : Calculating GC percent
+10/01/19 11:45:43 : Calculating Poisson based metrics
+10/01/19 11:45:45 : Processing DNA shape data
+10/01/19 11:45:45 : Creating negative training dataset
+
+*****************************************************
+10/01/19 11:45:45 : Starting 10-fold cross-validation
+10/01/19 11:46:07 : Plotting and saving ROC data
+
+
+python discover_tfbs/build_features.py fg_seqs/brg1_fg_seqs.fasta new_bkg_seqs/brg1_all_bkg_combined.fasta brg1 -fsff fg_seqs_shape/brg1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/brg1_all_bkg_combined.fasta.* -cv prc -s brg1_new_LinearSVC_PRC.pdf
+
+ 10/01/19 11:48:17 : Processing foreground FASTA file
+=====================================================
+10/01/19 11:48:17 : Reading FASTA file
+10/01/19 11:48:17 : Calculating GC percent
+10/01/19 11:48:17 : Calculating Poisson based metrics
+10/01/19 11:48:17 : Processing DNA shape data
+10/01/19 11:48:17 : Creating positive training dataset
+
+10/01/19 11:48:17 : Processing background FASTA file
+====================================================
+10/01/19 11:48:17 : Reading FASTA file
+10/01/19 11:48:17 : Calculating GC percent
+10/01/19 11:48:17 : Calculating Poisson based metrics
+10/01/19 11:48:19 : Processing DNA shape data
+10/01/19 11:48:19 : Creating negative training dataset
+
+*****************************************************
+10/01/19 11:48:19 : Starting 10-fold cross-validation
+10/01/19 11:49:04 : Plotting and saving PRC data
+
+
+###############
+# Oct. 12 2019
+###############
+
+# Get FASTA file from BLASTn result
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed tec1_curated_motifs_CA_A22.bed -s -fo tec1_curated_motifs_blastn_matches_CA_A22.fasta
+
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed bcr1_curated_motifs_CA_A22.bed -s -fo bcr1_curated_motifs_blastn_matches_CA_A22.fasta
+
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed brg1_curated_motifs_CA_A22.bed -s -fo bcrg1_curated_motifs_blastn_matches_CA_A22.fasta
+
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed efg1_curated_motifs_CA_A22.bed -s -fo efg1_curated_motifs_blastn_matches_CA_A22.fasta
+
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed rob1_curated_motifs_CA_A22.bed -s -fo rob1_curated_motifs_blastn_matches_CA_A22.fasta
+
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed ndt80_curated_motifs_CA_A22.bed -s -fo ndt80_curated_motifs_blastn_matches_CA_A22.fasta
+
+
+# building features for test datasets - output from blastn run
+
+# Tec1
+python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs.fasta new_bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fsff fg_seqs_shape/tec1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/tec1_all_bkg_combined.fasta.* -p genome_wide_blastn_results/tec1_curated_motifs_blastn_matches_CA_A22.fasta -psff genome_wide_blastn_results/tec1_curated_motifs_blastn_matches_CA_A22.fasta.* -o prediction_outputs/tec1_positive_predictions.bed
+
+ 10/12/19 14:33:41 : Processing foreground FASTA file
+=====================================================
+10/12/19 14:33:41 : Reading FASTA file
+10/12/19 14:33:41 : Calculating GC percent
+10/12/19 14:33:41 : Calculating Poisson based metrics
+10/12/19 14:33:41 : Processing DNA shape data
+10/12/19 14:33:41 : Creating positive training dataset
+
+10/12/19 14:33:41 : Processing background FASTA file
+====================================================
+10/12/19 14:33:41 : Reading FASTA file
+10/12/19 14:33:41 : Calculating GC percent
+10/12/19 14:33:41 : Calculating Poisson based metrics
+10/12/19 14:33:42 : Processing DNA shape data
+10/12/19 14:33:42 : Creating negative training dataset
+
+*****************************************************
+10/12/19 14:33:42 : Starting data training
+10/12/19 14:33:47 : Calculating GC percent
+10/12/19 14:33:47 : Calculating Poisson based metrics
+10/12/19 14:36:00 : Processing DNA shape data
+10/12/19 14:36:02 : Creating prediction dataset
+10/12/19 14:36:03 : Writing positive prediction results to prediction_outputs/tec1_positive_predictions.bed
+
+# Bcr1
+python discover_tfbs/build_features.py fg_seqs/bcr1_fg_seqs.fasta new_bkg_seqs/bcr1_all_bkg_combined.fasta bcr1 -fsff fg_seqs_shape/bcr1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/bcr1_all_bkg_combined.fasta.* -p genome_wide_blastn_results/bcr1_curated_motifs_blastn_matches_CA_A22.fasta -psff genome_wide_blastn_results/bcr1_curated_motifs_blastn_matches_CA_A22.fasta.* -o prediction_outputs/bcr1_positive_predictions.bed
+
+ 10/12/19 14:43:24: Processing foreground FASTA file
+=====================================================
+10/12/19 14:43:24: Reading FASTA file
+10/12/19 14:43:24: Calculating GC percent
+10/12/19 14:43:24: Calculating Poisson based metrics
+10/12/19 14:43:25: Processing DNA shape data
+10/12/19 14:43:25: Creating positive training dataset
+
+10/12/19 14:43:25: Processing background FASTA file
+====================================================
+10/12/19 14:43:25: Reading FASTA file
+10/12/19 14:43:25: Calculating GC percent
+10/12/19 14:43:25: Calculating Poisson based metrics
+10/12/19 14:43:25: Processing DNA shape data
+10/12/19 14:43:26: Creating negative training dataset
+
+*****************************************************
+10/12/19 14:43:26: Starting data training
+
+# Get FASTA file from BLASTn result
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed tec1_curated_motifs_CA_A22.bed -s -fo tec1_curated_motifs_blastn_matches_CA_A22.fasta
+
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed bcr1_curated_motifs_CA_A22.bed -s -fo bcr1_curated_motifs_blastn_matches_CA_A22.fasta
+
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed brg1_curated_motifs_CA_A22.bed -s -fo bcrg1_curated_motifs_blastn_matches_CA_A22.fasta
+
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed efg1_curated_motifs_CA_A22.bed -s -fo efg1_curated_motifs_blastn_matches_CA_A22.fasta
+
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed rob1_curated_motifs_CA_A22.bed -s -fo rob1_curated_motifs_blastn_matches_CA_A22.fasta
+
+bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed ndt80_curated_motifs_CA_A22.bed -s -fo ndt80_curated_motifs_blastn_matches_CA_A22.fasta
