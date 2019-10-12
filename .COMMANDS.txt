@@ -256,35 +256,3 @@ python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs.fasta new_bkg_seqs/t
 
 # Bcr1
 python discover_tfbs/build_features.py fg_seqs/bcr1_fg_seqs.fasta new_bkg_seqs/bcr1_all_bkg_combined.fasta bcr1 -fsff fg_seqs_shape/bcr1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/bcr1_all_bkg_combined.fasta.* -p genome_wide_blastn_results/bcr1_curated_motifs_blastn_matches_CA_A22.fasta -psff genome_wide_blastn_results/bcr1_curated_motifs_blastn_matches_CA_A22.fasta.* -o prediction_outputs/bcr1_positive_predictions.bed
-
- 10/12/19 14:43:24: Processing foreground FASTA file
-=====================================================
-10/12/19 14:43:24: Reading FASTA file
-10/12/19 14:43:24: Calculating GC percent
-10/12/19 14:43:24: Calculating Poisson based metrics
-10/12/19 14:43:25: Processing DNA shape data
-10/12/19 14:43:25: Creating positive training dataset
-
-10/12/19 14:43:25: Processing background FASTA file
-====================================================
-10/12/19 14:43:25: Reading FASTA file
-10/12/19 14:43:25: Calculating GC percent
-10/12/19 14:43:25: Calculating Poisson based metrics
-10/12/19 14:43:25: Processing DNA shape data
-10/12/19 14:43:26: Creating negative training dataset
-
-*****************************************************
-10/12/19 14:43:26: Starting data training
-
-# Get FASTA file from BLASTn result
-bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed tec1_curated_motifs_CA_A22.bed -s -fo tec1_curated_motifs_blastn_matches_CA_A22.fasta
-
-bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed bcr1_curated_motifs_CA_A22.bed -s -fo bcr1_curated_motifs_blastn_matches_CA_A22.fasta
-
-bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed brg1_curated_motifs_CA_A22.bed -s -fo bcrg1_curated_motifs_blastn_matches_CA_A22.fasta
-
-bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed efg1_curated_motifs_CA_A22.bed -s -fo efg1_curated_motifs_blastn_matches_CA_A22.fasta
-
-bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed rob1_curated_motifs_CA_A22.bed -s -fo rob1_curated_motifs_blastn_matches_CA_A22.fasta
-
-bedtools getfasta -fi ../genome_files/C_albicans_SC5314_A22_current_chromosomes.fasta -bed ndt80_curated_motifs_CA_A22.bed -s -fo ndt80_curated_motifs_blastn_matches_CA_A22.fasta
