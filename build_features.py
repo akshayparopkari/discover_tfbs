@@ -5,7 +5,7 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.7"
+__version__ = "0.2.0"
 
 
 import argparse
@@ -53,7 +53,8 @@ except AssertionError:
 
 def handle_program_options():
     parser = argparse.ArgumentParser(
-        description="Build feature table from input FASTA files.",
+        description="Build feature table from input FASTA files, train a SVC classifier "
+        " and perform cross-validation of prediction.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("fg_fasta_file", help="Path to foreground/true positive sequence "
                         "dataset FASTA format file [REQUIRED]")
@@ -61,18 +62,24 @@ def handle_program_options():
                         "dataset FASTA format file [REQUIRED]")
     parser.add_argument("-fsff", "--fg_shape_fasta_file", nargs="+", help="Path to 3D DNA"
                         " shape (DNAShapeR output files) data FASTA format files "
-                        "associated with 'fg_fasta_file' parameters [REQUIRED]")
+                        "associated with '--fg_fasta_file' parameters [REQUIRED]")
     parser.add_argument("-bsff", "--bkg_shape_fasta_file", nargs="+", help="Path to 3D "
                         "DNA shape (DNAShapeR output files) data FASTA format file "
-                        "associated with 'bkg_fasta_file' parameters [REQUIRED]")
+                        "associated with '--bkg_fasta_file' parameters [REQUIRED]")
     parser.add_argument("protein_name", type=str,
                         choices=["bcr1", "brg1", "efg1", "ndt80", "rob1", "tec1"],
                         help="Name of transcription factor. Please see the list of valid "
                         "choices for this parameter [REQUIRED]")
-    parser.add_argument("-cv", "--cross_validation", type=str, default="roc",
+    parser.add_argument("-cv", "--cross_validation", type=str, default=None,
                         choices=["roc", "prc"],
                         help="Specify which type pf cross validation curves to output. By"
                         " default, ROC plots will be saved.")
+    parser.add_argument("-p", "--predict", default=None,
+                        help="Supply a FASTA file to predict if it sequences in it are "
+                        "binding site or not.")
+    parser.add_argument("-psff", "--predict_shape_fasta_file", nargs="+", help="Path to 3D DNA"
+                        " shape (DNAShapeR output files) data FASTA format files "
+                        "associated with '--predict' parameters [REQUIRED]")
     parser.add_argument("-s", "--savefile", type=str,
                         help="Specify location and filename to save plots as SVG files.")
     parser.add_argument("-o", "--output_file", type=str,
@@ -95,9 +102,9 @@ def map_headers_to_values(fasta_header, values) -> dict:
     """
     try:
         assert len(fasta_header) == len(values)
-    except AssertionError:
-        exit("Could not create a mapping between FASTA headers and input numerical "
-             "array.")
+    except AssertionError as e:
+        exit("Could not create a mapping between FASTA headers and input numerical array."
+             "\n{}".format(e))
     else:
         return dict(zip(fasta_header, values))
 
@@ -131,11 +138,11 @@ def main():
     #######################################
     # FOREGROUND SEQUENCE PROCESSING #
     #######################################
-    print("\n", strftime("%x %X".format(localtime)), ": Processing foreground FASTA file")
+    print("\n", strftime("%x %X:".format(localtime)), "Processing foreground FASTA file")
     print("=" * 53, sep="\n")
 
     # get all foreground sequences
-    print(strftime("%x %X".format(localtime)), ": Reading FASTA file")
+    print(strftime("%x %X:".format(localtime)), "Reading FASTA file")
     fg_seqs = defaultdict(dict)
     fg_seqs[args.protein_name]["header"] = np.asarray([name
                                                        for name, seq in
@@ -145,13 +152,13 @@ def main():
                                                      parse_fasta(args.fg_fasta_file)])
 
     # get GC percent for all foreground sequences
-    print(strftime("%x %X".format(localtime)), ": Calculating GC percent")
+    print(strftime("%x %X:".format(localtime)), "Calculating GC percent")
     fg_gc = {tf: map_headers_to_values(data["header"],
                                        list(map(calculate_gc_percent, data["seqs"])))
              for tf, data in fg_seqs.items()}
 
     # calculating poisson based metrics
-    print(strftime("%x %X".format(localtime)), ": Calculating Poisson based metrics")
+    print(strftime("%x %X:".format(localtime)), "Calculating Poisson based metrics")
     fg_seq_pairs = all_possible_seq_pairs(fg_seqs[args.protein_name]["seqs"],
                                           fg_seqs[args.protein_name]["seqs"])
     fg_poisson_metrics = np.asarray([np.asarray(list(starmap(pac, pair_set))).
@@ -162,7 +169,7 @@ def main():
                                    fg_poisson_metrics)
 
     # collate all DNA shape values
-    print(strftime("%x %X".format(localtime)), ": Processing DNA shape data")
+    print(strftime("%x %X:".format(localtime)), "Processing DNA shape data")
     fg_shapes = dict()
     for shapefile in args.fg_shape_fasta_file:
         whichshape = shapefile.split(".")[-1]
@@ -185,7 +192,7 @@ def main():
                     fg_shapes[name][position] = float(shape[i])
 
     # create dataframe of all features for positive training data
-    print(strftime("%x %X".format(localtime)), ": Creating positive training dataset\n")
+    print(strftime("%x %X:".format(localtime)), "Creating positive training dataset\n")
     gc_data_df = pd.DataFrame.from_dict(fg_gc[args.protein_name], orient="index",
                                         columns=["gc_percent"])
     pac_data_df = pd.DataFrame.from_dict(fg_pac, orient="index",
@@ -200,11 +207,11 @@ def main():
     ##################################
     # BACKGROUND SEQUENCE PROCESSING #
     ##################################
-    print(strftime("%x %X".format(localtime)), ": Processing background FASTA file")
+    print(strftime("%x %X:".format(localtime)), "Processing background FASTA file")
     print("=" * 52, sep="\n")
 
     # get all background sequences
-    print(strftime("%x %X".format(localtime)), ": Reading FASTA file")
+    print(strftime("%x %X:".format(localtime)), "Reading FASTA file")
     bkg_seqs = defaultdict(dict)
     bkg_seqs[args.protein_name]["header"] = np.asarray([name
                                                        for name, seq in
@@ -214,15 +221,15 @@ def main():
                                                      parse_fasta(args.bkg_fasta_file)])
 
     # get GC percent for all background sequences
-    print(strftime("%x %X".format(localtime)), ": Calculating GC percent")
+    print(strftime("%x %X:".format(localtime)), "Calculating GC percent")
     bkg_gc = {tf: map_headers_to_values(data["header"],
                                         list(map(calculate_gc_percent, data["seqs"])))
               for tf, data in bkg_seqs.items()}
 
     # calculating poisson based metrics
-    print(strftime("%x %X".format(localtime)), ": Calculating Poisson based metrics")
+    print(strftime("%x %X:".format(localtime)), "Calculating Poisson based metrics")
     bkg_seq_pairs = all_possible_seq_pairs(bkg_seqs[args.protein_name]["seqs"],
-                                           bkg_seqs[args.protein_name]["seqs"])
+                                           fg_seqs[args.protein_name]["seqs"])
     bkg_poisson_metrics = np.asarray([np.asarray(list(starmap(pac, pair_set))).
                                       mean(axis=0, dtype=np.float64)
                                       for pair_set in bkg_seq_pairs])
@@ -231,7 +238,7 @@ def main():
                                     bkg_poisson_metrics)
 
     # collate all DNA shape values
-    print(strftime("%x %X".format(localtime)), ": Processing DNA shape data")
+    print(strftime("%x %X:".format(localtime)), "Processing DNA shape data")
     bkg_shapes = dict()
     for shapefile in args.bkg_shape_fasta_file:
         whichshape = shapefile.split(".")[-1]
@@ -254,7 +261,7 @@ def main():
                     bkg_shapes[name][position] = float(shape[i])
 
     # collect balanced dataset for training and prediction
-    print(strftime("%x %X".format(localtime)), ": Creating negative training dataset\n")
+    print(strftime("%x %X:".format(localtime)), "Creating negative training dataset\n")
     if args.cross_validation == "roc":
         sample_count = len(fg_seqs[args.protein_name]["seqs"])  # number of fg seqs
         negative_sample_list = sample(list(bkg_seqs[args.protein_name]["header"]),
@@ -295,13 +302,18 @@ def main():
     # TRAINING DATA PROCESSING #
     ############################
     print("*" * 53, sep="\n")
-    print(strftime("%x %X".format(localtime)), ": Starting 10-fold cross-validation")
+    print(strftime("%x %X:".format(localtime)), "Starting data training")
     random_state = np.random.RandomState(0)
     training_data = pd.concat([positive_data_df, negative_data_df])
     training_data = shuffle(training_data, random_state=random_state)
-    X = training_data.iloc[:, 1: training_data.shape[1]].values
+    if args.predict:
+        # exclude seq type for prediction_data
+        X = training_data.iloc[:, 2: training_data.shape[1]].values
+    else:
+        # don't exclude seq type for accuracy check
+        X = training_data.iloc[:, 1: training_data.shape[1]].values
     y = training_data["seq_type"].values
-    y = np.ravel(label_binarize(y, classes=["True", "Not_True"]))
+    y = np.ravel(label_binarize(y, classes=["Not_True", "True"]))
 
     # tuning parameters for SVC
     C_range = np.logspace(-10, 10, base=2)
@@ -311,11 +323,100 @@ def main():
     grid.fit(X, y)
     svc = SVC(C=grid.best_params_["C"], kernel="linear", probability=True)
 
+    # predict class of input FASTA data
+    if args.predict:
+        prediction_data = defaultdict(str)
+        prediction_data = {name: seq for name, seq in parse_fasta(args.predict)}
+
+        # calculating GC content and poisson based metrics
+        print(strftime("%x %X:".format(localtime)), "Calculating GC percent")
+        pred_gc = map_headers_to_values(prediction_data.keys(),
+                                        np.fromiter(map(calculate_gc_percent,
+                                                        prediction_data.values()),
+                                                    float))
+
+        print(strftime("%x %X:".format(localtime)), "Calculating Poisson based metrics")
+        prediction_data_pairs = all_possible_seq_pairs(prediction_data.values(),
+                                                       fg_seqs[args.protein_name]["seqs"])
+        pred_poisson_metrics = np.asarray([np.asarray(list(starmap(pac, pair_set))).
+                                          mean(axis=0, dtype=np.float64)
+                                          for pair_set in prediction_data_pairs])
+        pred_pac = map_headers_to_values(prediction_data.keys(),
+                                         pred_poisson_metrics)
+
+        print(strftime("%x %X:".format(localtime)), "Processing DNA shape data")
+        pred_shapes = dict()
+        for shapefile in args.predict_shape_fasta_file:
+            whichshape = shapefile.split(".")[-1]
+            if whichshape in ["MGW", "ProT", "EP"]:
+                for name, shape in parse_fasta(abspath(shapefile)):
+                    shape = shape.split(",")
+                    if not pred_shapes.get(name):
+                        pred_shapes[name] = dict()
+                    for i in range(2, len(shape) - 2):
+                        position = "{0}_pos_{1}".format(whichshape, i + 1)
+                        if shape[i] == "NA":
+                            # if DNAshapeR couldn't calculate the shape, use a value of 0
+                            pred_shapes[name][position] = 0.0
+                        else:
+                            # use DNAshapeR calculated value
+                            pred_shapes[name][position] = float(shape[i])
+            else:
+                # shape is Roll or HelT
+                for name, shape in parse_fasta(abspath(shapefile)):
+                    shape = shape.split(",")
+                    if not pred_shapes.get(name):
+                        pred_shapes[name] = dict()
+                    for i in range(1, len(shape) - 1):
+                        position = "{0}_pos_{1}".format(whichshape, i + 1)
+                        if shape[i] == "NA":
+                            # if DNAshapeR couldn't calculate the shape, use a value of 0
+                            pred_shapes[name][position] = 0.0
+                        else:
+                            # use DNAshapeR calculated value
+                            pred_shapes[name][position] = float(shape[i])
+
+        # collect data in DataFrame
+        print(strftime("%x %X:".format(localtime)), "Creating prediction dataset")
+        gc_data_df = pd.DataFrame.from_dict(pred_gc, orient="index",
+                                            columns=["gc_percent"])
+        pac_data_df = pd.DataFrame.from_dict(pred_pac, orient="index",
+                                             columns=["poisson_add_sim",
+                                                      "poisson_prod_sim"])
+        shapes_data_df = pd.DataFrame.from_dict(pred_shapes, orient="index")
+        prediction_data_df = gc_data_df.merge(pac_data_df, how="outer",
+                                              left_index=True, right_index=True)
+        prediction_data_df = prediction_data_df.merge(shapes_data_df, how="outer",
+                                                      left_index=True, right_index=True)
+
+        prediction_data_features = prediction_data_df.iloc[:, 1: training_data.shape[1]].values
+        pred_results = svc.fit(X, y).predict(prediction_data_features)
+        positive_pred_orfs = prediction_data_df.index.values[np.where(pred_results)]
+
+        # print positive predictions in BED format
+        # 1.chrom 2.chromStart 3.chromEnd 4.name 5.score 6.strand
+        print(strftime("%x %X:".format(localtime)),
+              "Writing positive prediction results to {}\n".
+              format(abspath(args.output_file)))
+        with open(args.output_file, "w") as pred_out:
+            for genome_loc in positive_pred_orfs:
+                chrom = genome_loc.strip().split(":")[0]
+                chromStart = genome_loc.strip().split(":")[1].split("-")[0]
+                chromEnd = genome_loc.strip().split(":")[1].split("-")[1].split("(")[0]
+                pred_name = "{0}_TFBS".format(args.protein_name)
+                score = "."
+                strand = genome_loc.strip().split("(")[1][0]
+                pred_out.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".
+                               format(chrom, chromStart, chromEnd, pred_name, score,
+                                      strand))
+        exit()
+
+    # perform cross-validation
     if args.cross_validation == "roc":
         tprs = []
         aucs = []
         mean_fpr = np.linspace(0, 1, 100)
-        print(strftime("%x %X".format(localtime)), ": Plotting and saving ROC data\n")
+        print(strftime("%x %X:".format(localtime)), "Plotting and saving ROC data\n")
         with mpl.style.context("ggplot"):
             plt.figure(figsize=(7, 7))
             for train, test in cv.split(X, y):
@@ -349,9 +450,9 @@ def main():
             plt.legend(loc="lower right", fontsize=12)
             plt.savefig(args.savefile, dpi=300, format="pdf", bbox_inches="tight",
                         pad_inches=0.1)
-    else:
+    elif args.cross_validation == "prc":
         # return PRC plots
-        print(strftime("%x %X".format(localtime)), ": Plotting and saving PRC data\n")
+        print(strftime("%x %X:".format(localtime)), "Plotting and saving PRC data\n")
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25,
                                                             random_state=random_state)
