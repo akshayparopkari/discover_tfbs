@@ -256,3 +256,6 @@ python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs.fasta new_bkg_seqs/t
 
 # Bcr1
 python discover_tfbs/build_features.py fg_seqs/bcr1_fg_seqs.fasta new_bkg_seqs/bcr1_all_bkg_combined.fasta bcr1 -fsff fg_seqs_shape/bcr1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/bcr1_all_bkg_combined.fasta.* -p genome_wide_blastn_results/bcr1_curated_motifs_blastn_matches_CA_A22.fasta -psff genome_wide_blastn_results/bcr1_curated_motifs_blastn_matches_CA_A22.fasta.* -o prediction_outputs/bcr1_positive_predictions.bed
+
+
+# Convert BLASTn output matches to BED6 tabular format

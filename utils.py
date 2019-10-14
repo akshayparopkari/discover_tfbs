@@ -5,7 +5,7 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.3"
+__version__ = "0.1.5"
 
 
 # imports
@@ -271,6 +271,101 @@ def get_kmer_counts(seq, k=6):
         return
     else:
         return counts
+
+
+@profile
+def blast_to_bed(infile, outfile):
+    """
+    Convert a tabular BLAST format to BED6 format.
+
+    :type infile: str, file name handle
+    :param infile: input tabular BLAST file
+
+    :type outfile: str, file name handle
+    :param outfile: tab-separated BED6 format
+                    chrom    chromStart    chromEnd    name    score    strand
+    """
+    with open(infile) as inblast:
+        with open(outfile, "w") as outbed:
+            for line in inblast:
+                line_list = line.strip().split("\t")
+                chrom = line_list[1].split("_")[0]
+                motif_name = line_list[0]
+                if int(line_list[8]) < int(line_list[9]):
+                    # alignment is on positive strand
+                    chrom_start = int(line_list[8]) - 1
+                    chrom_end = int(line_list[9])
+                    strand = "+"
+                else:
+                    # alignment is on negative strand
+                    chrom_start = int(line_list[9]) - 1
+                    chrom_end = int(line_list[8])
+                    strand = "-"
+                outbed.write("{0}\t{1}\t{2}\t{3}\t.\t{4}\n".format(chrom, chrom_start,
+                                                                   chrom_end, motif_name,
+                                                                   strand))
+
+
+@profile
+def sort_bed_file(inbed, outbed):
+    """
+    Sort input BED6 file first by chromosome and then by starting position.
+
+    :type inbed: str
+    :param inbed: Input BED6 file to be sorted
+
+    :type outbed: str
+    :param outbed: Sorted output BED6 file
+    """
+    import sys
+    import subprocess as sp
+    try:
+        import shlex
+    except ImportError as ie:
+        sys.exit("Please install {} module before executing this script.".format(ie))
+
+    sort_function = "sort -k1,1 -k2,2n {0}".format(inbed)
+    kwargs = shlex.split(sort_function)
+    print("Running {0}".format(kwargs))
+    outfile = open(outbed, "w")
+    sp.run(kwargs, stdout=outfile, check=True)
+    outfile.close()
+
+
+@profile
+def bed_to_fasta(inbed, genome_file, outfasta):
+    """
+    Convert a BED6 file to FASTA file using bedtools' getfasta function'.
+
+    From bedtools website -
+    bedtools getfasta will extract the sequence defined by the coordinates in a BED
+    interval and create a new FASTA entry in the output file for each extracted sequence.
+    By default, the FASTA header for each extracted sequence will be formatted as follows:
+    “<chrom>:<start>-<end>”.
+    The headers in the input FASTA file must exactly match the chromosome column in the
+    BED file.
+
+    :type inbed: str
+    :param inbed: Input BED6 file to convert into FASTA file
+
+    :type genome_file: str
+    :param genome_file: Genome sequences for all chromosomes
+
+    :type outfasta: str
+    :param outfasta: Output file name of FASTA file
+    """
+    import sys
+    import subprocess as sp
+    try:
+        import shlex
+    except ImportError as ie:
+        sys.exit("Please install {} module before executing this script.".format(ie))
+
+    get_fasta = "bedtools getfasta -fi {0} -bed {1} -s -fo {2}".format(genome_file,
+                                                                       inbed, outfasta)
+    kwargs = shlex.split(get_fasta)
+    print("Running {0}".format(get_fasta))
+    sp.run(kwargs, check=True)
 
 
 @profile
