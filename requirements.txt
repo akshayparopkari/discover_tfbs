@@ -108,7 +108,7 @@ partd==0.3.10
 patsy==0.5.1
 pexpect==4.7.0
 pickleshare==0.7.5
-Pillow==6.0.0
+Pillow==6.2.0
 pluggy==0.9.0
 progressbar2==3.37.1
 prometheus-client==0.6.0
