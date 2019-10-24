@@ -21,7 +21,6 @@ try:
     import matplotlib as mpl
     import matplotlib.pyplot as plt
     plt.switch_backend('agg')
-    mpl.rc("font", family="Arial")
 except ImportError:
     err.append("matplotlib")
 try:
@@ -121,6 +120,21 @@ def all_possible_seq_pairs(list1, fg_seqs):
     :param fg_seqs: Array of foreground sequences
     """
     return (list(product([seq], fg_seqs)) for seq in list1)
+
+
+def f_importances(coef, names, file, top=-1):
+    imp = coef.ravel()
+    imp, names = zip(*sorted(list(zip(imp, names))))
+
+    # Show all features
+    if top == -1:
+        top = len(names)
+    colors = ["#008000" if c < 0 else "#b20000" for c in imp]
+    with mpl.style.context("ggplot"):
+        plt.figure(figsize=(10, 8))
+        plt.barh(range(top), imp[::-1][0:top], align="center", color=colors)
+        plt.yticks(range(top), names[::-1][0:top], fontsize=10)
+        plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
 def main():
@@ -388,9 +402,23 @@ def main():
                                               left_index=True, right_index=True)
         prediction_data_df = prediction_data_df.merge(shapes_data_df, how="outer",
                                                       left_index=True, right_index=True)
-
+        try:
+            assert not prediction_data_df.isnull().values.any()
+        except AssertionError:
+            # NaNs detected in input dataset, remove rows with NaNs
+            prediction_data_df = prediction_data_df.dropna()
         prediction_data_features = prediction_data_df.iloc[:, 1: training_data.shape[1]].values
         pred_results = svc.fit(X, y).predict(prediction_data_features)
+
+#         print(svc.coef_, prediction_data_df.columns.values[1:], args.savefile, sep="\n\n")
+        print(strftime("%x %X:".format(localtime)),
+              "Writing feature importance ranking to {}\n".
+              format(abspath(args.savefile)))
+        f_importances(svc.coef_,
+                      [entry.replace("_", " ").replace("pos ", "P")
+                       for entry in prediction_data_df.columns.values],
+                      args.savefile)
+        exit()
         positive_pred_orfs = prediction_data_df.index.values[np.where(pred_results)]
 
         # print positive predictions in BED format
