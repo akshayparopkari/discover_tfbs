@@ -36,7 +36,7 @@ try:
     from sklearn.utils import shuffle
     from sklearn.model_selection import train_test_split
     from sklearn.model_selection import GridSearchCV
-    from sklearn.model_selection import StratifiedShuffleSplit
+    from sklearn.model_selection import StratifiedShuffleSplit, permutation_test_score
     from sklearn.preprocessing import label_binarize
     from sklearn.metrics import roc_curve, auc, precision_recall_curve,\
         average_precision_score
@@ -153,6 +153,28 @@ def f_importances(coef, names: list, file: str, top=-1: int):
         plt.barh(range(top), imp[::-1][0:top], align="center", color=colors)
         plt.yticks(range(top), names[::-1][0:top], fontsize=10)
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
+
+
+    def permutation_result(estimator, X, y, random_state, file):
+        """
+        Run permutation tests for classifier and assess significance of accuracy score.
+        """
+        score, permutation_score, p_value = permutation_test_score(svc, X, y,
+                                                                   scoring="f1",
+                                                                   n_permutations=1000,
+                                                                   n_jobs=-1,
+                                                                   random_state=random_state,
+                                                                   verbose=1)
+        print("Linear SVM classification score {0} (pvalue : {1})".format(score, pvalue))
+        with mpl.style.context("ggplot"):
+            plt.figure(figsize=(10, 8))
+            plt.hist(permutation_score, label="Permutation scores", edgecolor="k")
+            plt.plt(2 * [score], plt.ylim(), "--g", linewidth = 3,
+                    label="Model classification score (pvalue = {:0.03f})".format(pvalue))
+            plt.legend()
+            plt.tight()
+            plt.xlabel("Permutation scores")
+            plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
 def main():
@@ -354,6 +376,8 @@ def main():
     grid = GridSearchCV(SVC(kernel="linear"), param_grid=param_grid, cv=cv)
     grid.fit(X, y)
     svc = SVC(C=grid.best_params_["C"], kernel="linear", probability=True)
+
+#     [ADD PERMUTATION TEST RESULT CALCULATION AND PLOTTING HERE]
 
     # predict class of input FASTA data
     if args.predict:
