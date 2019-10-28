@@ -122,12 +122,30 @@ def all_possible_seq_pairs(list1, fg_seqs):
     return (list(product([seq], fg_seqs)) for seq in list1)
 
 
-def f_importances(coef, names, file, top=-1):
+def f_importances(coef, names: list, file: str, top=-1: int):
+    """
+    Using the coefficient weights, plot the contribution of each or subset of features in
+    classification. Currently, this function is set up for binary classification.
+
+    :type coef: array-like, list or numpy array
+    :param coef: SVM weights assigned to each feature.
+
+    :type names: list
+    :param names: List of feature names to use for plotting
+
+    :type file: str
+    :param file: Path and name of file to save feature contribution bar plot. The file
+                 will be saved in PDF format.
+
+    :type top: int
+    :param top: Number of features to plot for visualizing their contribution. Default
+                value of -1 will plot all features.
+    """
     imp = coef.ravel()
     imp, names = zip(*sorted(list(zip(imp, names))))
 
-    # Show all features
     if top == -1:
+        # Show all features
         top = len(names)
     colors = ["#008000" if c < 0 else "#b20000" for c in imp]
     with mpl.style.context("ggplot"):
