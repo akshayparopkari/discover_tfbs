@@ -80,7 +80,7 @@ def handle_program_options():
                         " shape (DNAShapeR output files) data FASTA format files "
                         "associated with '--predict' parameters [REQUIRED]")
     parser.add_argument("-s", "--savefile", type=str,
-                        help="Specify location and filename to save plots as SVG files.")
+                        help="Specify location and filename to save plots as PDF files.")
     parser.add_argument("-o", "--output_file", type=str,
                         help="Specify location and filename to save consolidated data to "
                         "this tab-separated file")
@@ -155,26 +155,26 @@ def f_importances(coef, names: list, file: str, top=-1: int):
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
-    def permutation_result(estimator, X, y, random_state, file):
-        """
-        Run permutation tests for classifier and assess significance of accuracy score.
-        """
-        score, permutation_score, p_value = permutation_test_score(svc, X, y,
-                                                                   scoring="f1",
-                                                                   n_permutations=1000,
-                                                                   n_jobs=-1,
-                                                                   random_state=random_state,
-                                                                   verbose=1)
-        print("Linear SVM classification score {0} (pvalue : {1})".format(score, pvalue))
-        with mpl.style.context("ggplot"):
-            plt.figure(figsize=(10, 8))
-            plt.hist(permutation_score, label="Permutation scores", edgecolor="k")
-            plt.plt(2 * [score], plt.ylim(), "--g", linewidth = 3,
-                    label="Model classification score (pvalue = {:0.03f})".format(pvalue))
-            plt.legend()
-            plt.tight()
-            plt.xlabel("Permutation scores")
-            plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
+def permutation_result(estimator, X, y, random_state, file):
+    """
+    Run permutation tests for classifier and assess significance of accuracy score.
+    """
+    score, permutation_score, p_value = permutation_test_score(svc, X, y,
+                                                               scoring="f1",
+                                                               n_permutations=1000,
+                                                               n_jobs=-1,
+                                                               random_state=random_state,
+                                                               verbose=1)
+    print("Linear SVM classification score {0} (pvalue : {1})".format(score, pvalue))
+    with mpl.style.context("ggplot"):
+        plt.figure(figsize=(10, 8))
+        plt.hist(permutation_score, label="Permutation scores", edgecolor="k")
+        plt.plt(2 * [score], plt.ylim(), "--g", linewidth = 3,
+                label="Model classification score (pvalue = {:0.03f})".format(pvalue))
+        plt.legend()
+        plt.tight()
+        plt.xlabel("Permutation scores")
+        plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
 def main():
