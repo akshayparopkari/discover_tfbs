@@ -5,11 +5,12 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 
 import argparse
 from sys import exit
+from os import cpu_count
 from random import sample
 from collections import defaultdict
 from os.path import isfile, abspath
@@ -122,7 +123,7 @@ def all_possible_seq_pairs(list1, fg_seqs):
     return (list(product([seq], fg_seqs)) for seq in list1)
 
 
-def f_importances(coef, names: list, file: str, top=-1: int):
+def f_importances(coef, names: list, file: str, top=-1):
     """
     Using the coefficient weights, plot the contribution of each or subset of features in
     classification. Currently, this function is set up for binary classification.
@@ -155,24 +156,47 @@ def f_importances(coef, names: list, file: str, top=-1: int):
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
-def permutation_result(estimator, X, y, random_state, file):
+def permutation_result(estimator, X, y, cv, random_state, file: str):
     """
-    Run permutation tests for classifier and assess significance of accuracy score.
+    Run permutation tests for classifier and assess significance of accuracy score. This
+    is a wrapper around sklearn.model_selection.permutation_test_score
+
+    :type estimator: scikit-learn classifier object
+    :param estimator: Instance of scikit-learn initialized classifier which has a 'fit'
+                      method
+
+    :type X: array-like, list or numpy array
+    :param X: Numpy array of features - columns of feature table
+
+    :type y: array-like, list or numpy array
+    :param y: Class labels of each row in X
+
+    :type cv: int, iterable
+    :param cv: If integer, those many cross validations are run. User can also supply an
+               iterable to create (train, test) splits using indices.
+
+    :type random_state: numpy random object
+    :param random_state: Seed to use for multiple reproducible runs
+
+    :type file: str
+    :param file: Path and file name to save the bar plot
     """
-    score, permutation_score, p_value = permutation_test_score(svc, X, y,
-                                                               scoring="f1",
-                                                               n_permutations=1000,
-                                                               n_jobs=-1,
-                                                               random_state=random_state,
-                                                               verbose=1)
-    print("Linear SVM classification score {0} (pvalue : {1})".format(score, pvalue))
+    score, permutation_score, p_value = permutation_test_score(estimator, X, y,
+                                                               scoring="accuracy",
+                                                               cv=cv,
+                                                               n_permutations=100,
+                                                               n_jobs=cpu_count() - 1,
+                                                               random_state=random_state)
+    print("Linear SVM classification score {0:0.02f} (pvalue : {1:0.05f})".
+          format(score, p_value))
     with mpl.style.context("ggplot"):
         plt.figure(figsize=(10, 8))
         plt.hist(permutation_score, label="Permutation scores", edgecolor="k")
-        plt.plt(2 * [score], plt.ylim(), "--g", linewidth = 3,
-                label="Model classification score (pvalue = {:0.03f})".format(pvalue))
+        plt.plot(2 * [score], plt.ylim(), "--g", linewidth = 3,
+                label="Model classification score {0:0.02f} (pvalue = {1:0.05f})".
+                format(score, p_value))
         plt.legend()
-        plt.tight()
+        plt.tight_layout()
         plt.xlabel("Permutation scores")
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
@@ -377,7 +401,12 @@ def main():
     grid.fit(X, y)
     svc = SVC(C=grid.best_params_["C"], kernel="linear", probability=True)
 
-#     [ADD PERMUTATION TEST RESULT CALCULATION AND PLOTTING HERE]
+    # Permutation test to calculate significance of model accuracy
+    print(strftime("%x %X:".format(localtime)),
+          "Performing permutation test to assess model accuracy for {}".
+          format(args.protein_name))
+    permutation_result(svc, X, y, cv, random_state, args.savefile)
+    exit()
 
     # predict class of input FASTA data
     if args.predict:
