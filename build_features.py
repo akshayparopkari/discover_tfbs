@@ -5,7 +5,7 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 
 import argparse
@@ -77,8 +77,8 @@ def handle_program_options():
     parser.add_argument("-p", "--predict", default=None,
                         help="Supply a FASTA file to predict if it sequences in it are "
                         "binding site or not.")
-    parser.add_argument("-psff", "--predict_shape_fasta_file", nargs="+", help="Path to 3D DNA"
-                        " shape (DNAShapeR output files) data FASTA format files "
+    parser.add_argument("-psff", "--predict_shape_fasta_file", nargs="+", help="Path to "
+                        "3D DNA shape (DNAShapeR output files) data FASTA format files "
                         "associated with '--predict' parameters [REQUIRED]")
     parser.add_argument("-s", "--savefile", type=str,
                         help="Specify location and filename to save plots as PDF files.")
@@ -182,22 +182,28 @@ def permutation_result(estimator, X, y, cv, random_state, file: str):
     :param file: Path and file name to save the bar plot
     """
     score, permutation_score, p_value = permutation_test_score(estimator, X, y,
-                                                               scoring="accuracy",
+                                                               scoring="average_precision",
                                                                cv=cv,
-                                                               n_permutations=100,
+                                                               n_permutations=150,
                                                                n_jobs=cpu_count() - 1,
                                                                random_state=random_state)
-    print("Linear SVM classification score {0:0.02f} (pvalue : {1:0.05f})".
+    print("Linear SVM classification score {0:0.03f} (pvalue : {1:0.05f})".
           format(score, p_value))
     with mpl.style.context("ggplot"):
         plt.figure(figsize=(10, 8))
-        plt.hist(permutation_score, label="Permutation scores", edgecolor="k")
-        plt.plot(2 * [score], plt.ylim(), "--g", linewidth = 3,
-                label="Model classification score {0:0.02f} (pvalue = {1:0.05f})".
-                format(score, p_value))
-        plt.legend()
+        plt.hist(permutation_score, bins=25, alpha=0.25, hatch="//", edgecolor="k",
+                 label="Average precision scores for shuffled labels")
+        ylim = plt.ylim()[1]
+        plt.vlines(2 * [1. / np.unique(y).size], 0, ylim, linestyle="dashdot",
+                   linewidth=2, label='50/50 chance')
+        plt.vlines(2 * [score], 0, ylim, linewidth=3, colors="g")
+        score_text = "Model Score\n{:0.03f}*".format(score)
+        plt.text(score - 0.05, ylim + 0.05, score_text, ma="center")
+        plt.xlim(0.0, 1.0)
+        plt.legend(loc=2)
         plt.tight_layout()
-        plt.xlabel("Permutation scores")
+        plt.xlabel("Average precision scores")
+        plt.ylabel("Frequency")
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
@@ -481,7 +487,6 @@ def main():
         prediction_data_features = prediction_data_df.iloc[:, 1: training_data.shape[1]].values
         pred_results = svc.fit(X, y).predict(prediction_data_features)
 
-#         print(svc.coef_, prediction_data_df.columns.values[1:], args.savefile, sep="\n\n")
         print(strftime("%x %X:".format(localtime)),
               "Writing feature importance ranking to {}\n".
               format(abspath(args.savefile)))

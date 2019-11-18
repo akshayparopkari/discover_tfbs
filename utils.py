@@ -5,11 +5,12 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 
 
 # imports
 from sys import exit
+import subprocess as sp
 from random import choices
 from itertools import product
 from functools import lru_cache
@@ -18,6 +19,10 @@ from time import localtime, strftime
 from collections import defaultdict, Counter as cnt
 from os.path import join, realpath, isfile, basename
 err = set()
+try:
+    import shlex as sh
+except ImportError:
+    err.add("shlex")
 try:
     import pandas as pd
 except ImportError:
@@ -159,6 +164,26 @@ def calculate_gc_percent(sequence: str) -> float:
     sequence = sequence.upper()  # convert to upper case
     gc = 100 * (sequence.count("G") + sequence.count("C")) / seq_len
     return gc
+
+
+@profile
+def split_file(fnh: str, nlines=50000):
+    """
+    Split FASTA file into multiple smaller FASTA files. Each of the smaller FASTA file
+    will have at least 50000 lines.
+
+    :param fnh: File name handle of the FASTA file to be split into smaller files.
+
+    :type nlines: int
+    :param nlines: Split fnh into smaller files with nlines number of lines.
+    """
+    prefix = fnh.split(".")[0] + "_"
+    additional_suffix = ".fasta"
+    split_func = "split -d -a 5 --additional-suffix {0} -l {1} {2} {3}".\
+        format(additional_suffix, nlines, fnh, prefix)
+    kwargs = sh.split(split_func)
+    print("Running {0}".format(kwargs))
+    sp.run(kwargs)
 
 
 @profile
