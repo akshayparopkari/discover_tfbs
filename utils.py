@@ -5,7 +5,7 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 
 
 # imports
@@ -23,6 +23,10 @@ try:
     import shlex as sh
 except ImportError:
     err.add("shlex")
+try:
+    from urllib3 import PoolManager
+except ImportError:
+    err.add("urllib3")
 try:
     import pandas as pd
 except ImportError:
@@ -164,6 +168,37 @@ def calculate_gc_percent(sequence: str) -> float:
     sequence = sequence.upper()  # convert to upper case
     gc = 100 * (sequence.count("G") + sequence.count("C")) / seq_len
     return gc
+
+
+@profile
+def download_ca_a22_genome_annot(outfile="C_albicans_SC5314_A22_current_features.gff"):
+     """
+     Download the latest genome GFF file for Candida albicans SC5314 from Candida Genome
+     Database. Data is located at
+     http://www.candidagenome.org/download/gff/C_albicans_SC5314/Assembly22/C_albicans_SC5314_A22_current_features.gff
+     As per CGD - This file contains the current CGD annotation of all features in GFF
+     based on Assembly 22 of the C. albicans SC5314 genome sequence.
+
+     :type outfile: str
+     :param outfile: File name used to save the CGD genome annotations. Be default, the
+                     file is saved in current directory as
+                     C_albicans_SC5314_A22_current_features.gff
+     """
+     # set download URL
+     gff_url = "http://www.candidagenome.org/download/gff/C_albicans_SC5314/Assembly22/C_albicans_SC5314_A22_current_features.gff"
+
+     print("Getting GFF file content")
+     gff_data = http.request("GET", gff_url, preload_content=False)
+
+     # settle output file name handle
+     outfnh = abspath(join("./", outfile))
+
+     # write GFF content to file
+     print("Saving GFF file")
+     with open(outfnh, "wb") as outf:
+         for chunk in gff_data.stream():
+             outf.write(chunk)
+     print("GFF file saved at {0}".format(outfnh))
 
 
 @profile
