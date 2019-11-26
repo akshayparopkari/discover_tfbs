@@ -5,7 +5,7 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 
 
 # imports
@@ -15,6 +15,7 @@ from random import choices
 from itertools import product
 from functools import lru_cache
 from urllib.parse import parse_qs
+from urllib.request import urlopen
 from time import localtime, strftime
 from collections import defaultdict, Counter as cnt
 from os.path import join, realpath, isfile, basename
@@ -99,6 +100,22 @@ def dna_iupac_codes(seq):
                    "M": ["A", "C"], "B": ["C", "G", "T"], "D": ["A", "G", "T"],
                    "H": ["A", "C", "T"], "V": ["A", "C", "G"], "N": ["A", "C", "G", "T"]}
     return list(map("".join, product(*[iupac_codes[nt] for nt in seq])))
+
+
+@profile
+def get_ca_chrom_seq(url="http://www.candidagenome.org/download/sequence/C_albicans_SC5314/Assembly22/current/C_albicans_SC5314_A22_current_chromosomes.fasta.gz",
+                     outfile="./C_albicans_SC5314_A22_current_chromosomes.fasta.gz"):
+     """
+     Download Candida albicans chromosome sequence FASTA file from Candida genome
+     database (CGD)
+
+     :param url: URL of Gzipped file from CGD
+
+     :param outfile: File name and location to save chromosomal sequences from CGD
+     """
+     with urlopen(url) as response, open(outfile, "wb") as outf:
+         for chunk in response.stream():
+             outf.write(chunk)
 
 
 def parse_fasta(fasta_file):
