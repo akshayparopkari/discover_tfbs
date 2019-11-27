@@ -192,12 +192,13 @@ def permutation_result(estimator, X, y, cv, n_permute, random_state, file: str):
                                                                n_permutations=n_permute,
                                                                n_jobs=-1,
                                                                random_state=random_state)
-    print("Linear SVM classification score {0:0.03f} (pvalue : {1:0.05f})".
+    print(strftime("%x %X:".format(localtime)),
+          "Linear SVM classification score {0:0.03f} (pvalue : {1:0.05f})".
           format(score, p_value))
     with mpl.style.context("ggplot"):
         plt.figure(figsize=(10, 8))
-        plt.hist(permutation_score, bins=25, alpha=0.25, hatch="//", edgecolor="k",
-                 label="Average precision scores for shuffled labels")
+        plt.hist(permutation_score, bins=25, alpha=0.5, hatch="//", edgecolor="k",
+                 label="Precision scores for shuffled labels")
         ylim = plt.ylim()[1]
         plt.vlines(2 * [1. / np.unique(y).size], 0, ylim, linestyle="dashdot",
                    linewidth=2, label='50/50 chance')
