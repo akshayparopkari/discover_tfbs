@@ -5,7 +5,7 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 
 import argparse
@@ -75,8 +75,13 @@ def handle_program_options():
                         help="Specify which type pf cross validation curves to output. By"
                         " default, ROC plots will be saved.")
     parser.add_argument("-p", "--predict", default=None,
-                        help="Supply a FASTA file to predict if it sequences in it are "
+                        help="Supply a FASTA file to predict if the sequences in it are "
                         "binding site or not.")
+    parser.add_argument("-per", "--permute", type=int, default=None,
+                        help="Number of permutations to run for assessing model bias. "
+                        "Supply an integer value, and value of 10000 is considered as a "
+                        "good estimate. Higher values take longer to run the permutation"
+                        "tests.")
     parser.add_argument("-psff", "--predict_shape_fasta_file", nargs="+", help="Path to "
                         "3D DNA shape (DNAShapeR output files) data FASTA format files "
                         "associated with '--predict' parameters [REQUIRED]")
@@ -148,7 +153,7 @@ def f_importances(coef, names: list, file: str, top=-1):
     if top == -1:
         # Show all features
         top = len(names)
-    colors = ["#008000" if c < 0 else "#b20000" for c in imp]
+    colors = ["#008000" if c < 0.0 else "#b20000" for c in imp]
     with mpl.style.context("ggplot"):
         plt.figure(figsize=(10, 8))
         plt.barh(range(top), imp[::-1][0:top], align="center", color=colors)
@@ -156,7 +161,7 @@ def f_importances(coef, names: list, file: str, top=-1):
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
-def permutation_result(estimator, X, y, cv, random_state, file: str):
+def permutation_result(estimator, X, y, cv, n_permute, random_state, file: str):
     """
     Run permutation tests for classifier and assess significance of accuracy score. This
     is a wrapper around sklearn.model_selection.permutation_test_score
@@ -184,8 +189,8 @@ def permutation_result(estimator, X, y, cv, random_state, file: str):
     score, permutation_score, p_value = permutation_test_score(estimator, X, y,
                                                                scoring="average_precision",
                                                                cv=cv,
-                                                               n_permutations=150,
-                                                               n_jobs=cpu_count() - 1,
+                                                               n_permutations=n_permute,
+                                                               n_jobs=-1,
                                                                random_state=random_state)
     print("Linear SVM classification score {0:0.03f} (pvalue : {1:0.05f})".
           format(score, p_value))
@@ -403,16 +408,17 @@ def main():
     C_range = np.logspace(-10, 10, base=2)
     param_grid = dict(C=C_range)
     cv = StratifiedShuffleSplit(n_splits=10, test_size=0.2, random_state=random_state)
-    grid = GridSearchCV(SVC(kernel="linear"), param_grid=param_grid, cv=cv)
+    grid = GridSearchCV(SVC(kernel="linear"), param_grid=param_grid, cv=cv, n_jobs=-1)
     grid.fit(X, y)
     svc = SVC(C=grid.best_params_["C"], kernel="linear", probability=True)
 
     # Permutation test to calculate significance of model accuracy
-    print(strftime("%x %X:".format(localtime)),
-          "Performing permutation test to assess model accuracy for {}".
-          format(args.protein_name))
-    permutation_result(svc, X, y, cv, random_state, args.savefile)
-    exit()
+    if args.permute:
+        print(strftime("%x %X:".format(localtime)),
+              "Performing permutation test to assess model accuracy for {}".
+              format(args.protein_name))
+        permutation_result(svc, X, y, cv, args.permute, random_state, args.savefile)
+        exit()
 
     # predict class of input FASTA data
     if args.predict:
@@ -494,7 +500,6 @@ def main():
                       [entry.replace("_", " ").replace("pos ", "P")
                        for entry in prediction_data_df.columns.values],
                       args.savefile)
-        exit()
         positive_pred_orfs = prediction_data_df.index.values[np.where(pred_results)]
 
         # print positive predictions in BED format
