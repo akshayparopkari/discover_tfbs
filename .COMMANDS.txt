@@ -6,7 +6,13 @@ python discover_tfbs/build_features.py fg_seqs/brg1_fg_seqs.fasta bkg_seqs/brg1_
 python discover_tfbs/build_features.py fg_seqs/efg1_fg_seqs.fasta bkg_seqs/efg1_all_bkg_combined.fasta efg1 -fsff fg_seqs_shape/efg1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*efg1* -cv roc -s efg1_LinearSVC_ROC.pdf
 python discover_tfbs/build_features.py fg_seqs/ndt80_fg_seqs.fasta bkg_seqs/ndt80_all_bkg_combined.fasta ndt80 -fsff fg_seqs_shape/ndt80_fg_seqs.fasta.* -bsff bkg_seqs_shape/*ndt80* -cv roc -s ndt80_LinearSVC_ROC.pdf
 python discover_tfbs/build_features.py fg_seqs/rob1_fg_seqs.fasta bkg_seqs/rob1_all_bkg_combined.fasta rob1 -fsff fg_seqs_shape/rob1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*rob1* -cv roc -s rob1_LinearSVC_ROC.pdf
-
+# Dec 2019 update to ROC command
+python discover_tfbs/build_features.py fg_seqs/bcr1_fg_seqs2.fasta new_bkg_seqs/bcr1_all_bkg_combined.fasta bcr1 -fbf fg_seqs/bcr1_true_sites.bed -bsff new_bkg_seqs_shapes/bcr1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv roc -s dec2019_CV_plots/bcr1_ROC.pdf
+python discover_tfbs/build_features.py fg_seqs/brg1_fg_seqs2.fasta new_bkg_seqs/brg1_all_bkg_combined.fasta brg1 -fbf fg_seqs/brg1_true_sites.bed -bsff new_bkg_seqs_shapes/brg1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv roc -s dec2019_CV_plots/brg1_ROC.pdf
+python discover_tfbs/build_features.py fg_seqs/efg1_fg_seqs2.fasta new_bkg_seqs/efg1_all_bkg_combined.fasta efg1 -fbf fg_seqs/efg1_true_sites.bed -bsff new_bkg_seqs_shapes/efg1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv roc -s dec2019_CV_plots/efg1_ROC.pdf
+python discover_tfbs/build_features.py fg_seqs/ndt80_fg_seqs2.fasta new_bkg_seqs/ndt80_all_bkg_combined.fasta ndt80 -fbf fg_seqs/ndt80_true_sites.bed -bsff new_bkg_seqs_shapes/ndt80_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv roc -s dec2019_CV_plots/ndt80_ROC.pdf
+python discover_tfbs/build_features.py fg_seqs/rob1_fg_seqs2.fasta new_bkg_seqs/rob1_all_bkg_combined.fasta rob1 -fbf fg_seqs/rob1_true_sites.bed -bsff new_bkg_seqs_shapes/rob1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv roc -s dec2019_CV_plots/rob1_ROC.pdf
+python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs2.fasta new_bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fbf fg_seqs/tec1_true_sites.bed -bsff new_bkg_seqs_shapes/tec1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv roc -s dec2019_CV_plots/tec1_ROC.pdf
 
 # PRC curves
 python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs.fasta bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fsff fg_seqs_shape/tec1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*tec1* -cv prc -s tec1_LinearSVC_PRC.pdf
@@ -15,7 +21,13 @@ python discover_tfbs/build_features.py fg_seqs/brg1_fg_seqs.fasta bkg_seqs/brg1_
 python discover_tfbs/build_features.py fg_seqs/efg1_fg_seqs.fasta bkg_seqs/efg1_all_bkg_combined.fasta efg1 -fsff fg_seqs_shape/efg1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*efg1* -cv prc -s efg1_LinearSVC_PRC.pdf
 python discover_tfbs/build_features.py fg_seqs/ndt80_fg_seqs.fasta bkg_seqs/ndt80_all_bkg_combined.fasta ndt80 -fsff fg_seqs_shape/ndt80_fg_seqs.fasta.* -bsff bkg_seqs_shape/*ndt80* -cv prc -s ndt80_LinearSVC_PRC.pdf
 python discover_tfbs/build_features.py fg_seqs/rob1_fg_seqs.fasta bkg_seqs/rob1_all_bkg_combined.fasta rob1 -fsff fg_seqs_shape/rob1_fg_seqs.fasta.* -bsff bkg_seqs_shape/*rob1* -cv prc -s rob1_LinearSVC_PRC.pdf
-
+# Dec 2019 update to PRC command
+python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs2.fasta new_bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fbf fg_seqs/tec1_true_sites.bed -bsff new_bkg_seqs_shapes/tec1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv prc -s dec2019_CV_plots/tec1_PRC.pdf
+python discover_tfbs/build_features.py fg_seqs/bcr1_fg_seqs2.fasta new_bkg_seqs/bcr1_all_bkg_combined.fasta bcr1 -fbf fg_seqs/bcr1_true_sites.bed -bsff new_bkg_seqs_shapes/bcr1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv prc -s dec2019_CV_plots/bcr1_PRC.pdf
+python discover_tfbs/build_features.py fg_seqs/brg1_fg_seqs2.fasta new_bkg_seqs/brg1_all_bkg_combined.fasta brg1 -fbf fg_seqs/brg1_true_sites.bed -bsff new_bkg_seqs_shapes/brg1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv prc -s dec2019_CV_plots/brg1_PRC.pdf
+python discover_tfbs/build_features.py fg_seqs/efg1_fg_seqs2.fasta new_bkg_seqs/efg1_all_bkg_combined.fasta efg1 -fbf fg_seqs/efg1_true_sites.bed -bsff new_bkg_seqs_shapes/efg1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv prc -s dec2019_CV_plots/efg1_PRC.pdf
+python discover_tfbs/build_features.py fg_seqs/ndt80_fg_seqs2.fasta new_bkg_seqs/ndt80_all_bkg_combined.fasta ndt80 -fbf fg_seqs/ndt80_true_sites.bed -bsff new_bkg_seqs_shapes/ndt80_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv prc -s dec2019_CV_plots/ndt80_PRC.pdf
+python discover_tfbs/build_features.py fg_seqs/rob1_fg_seqs2.fasta new_bkg_seqs/rob1_all_bkg_combined.fasta rob1 -fbf fg_seqs/rob1_true_sites.bed -bsff new_bkg_seqs_shapes/rob1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv prc -s dec2019_CV_plots/rob1_PRC.pdf
 
 
 ###############
