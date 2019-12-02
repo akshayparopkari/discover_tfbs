@@ -11,6 +11,7 @@ __version__ = "0.1.4"
 import argparse
 from sys import exit
 from os import mkdir
+from pprint import pprint
 from random import choices, random
 from collections import defaultdict
 from time import localtime, strftime
@@ -211,12 +212,29 @@ def main():
         # output directory doesn't exist, create it
         mkdir(outdir)
 
+    fg_seqs = {header: seq for header, seq in parse_fasta(args.fg_fasta_file)}
+
+    ##############################################
+    # DINUCLEOTIDE SHUFFLED FOREGROUND SEQUENCES #
+    ##############################################
+    print(strftime("\n%x %H:%M:".format(localtime)),
+          "Generating length-matched shuffled sequences from foreground sequences")
+
+    # write to output FASTA file
+    outfnh = join(outdir,
+                  "{}_dinuc_shuffled_len_matched_bkg_seqs.fasta".
+                  format(args.protein_name))
+    with open(outfnh, "w") as outf:
+        for header, seq in fg_seqs.items():
+            outf.write(">dinuc_shuffled_len_matched_bkg_for_{}\n".format(header))
+            shuffled = dinuclShuffle(seq)
+            outf.write("{}\n".format(shuffled))
+
     #########################################################
     # GC% AND LENGTH MATCHED BACKGROUND SEQUENCE GENERATION #
     #########################################################
     print(strftime("\n%x %H:%M:".format(localtime)),
           "Generating random length-matched background sequences from CDS/exonic regions")
-    fg_seqs = {header: seq for header, seq in parse_fasta(args.fg_fasta_file)}
     seq_length = len(list(fg_seqs.values())[0])
     fg_gc = {header: round(calculate_gc_percent(seq)) for header, seq in fg_seqs.items()}
 
@@ -238,22 +256,6 @@ def main():
             dict_key = "gc_{:d}_pc".format(gc_pc)
             random_seq = choices(cds_exons_len_matched_gc[dict_key])[0]
             outf.write(">{0}\n{1}\n".format(random_header, random_seq))
-
-    ##############################################
-    # DINUCLEOTIDE SHUFFLED FOREGROUND SEQUENCES #
-    ##############################################
-    print(strftime("\n%x %H:%M:".format(localtime)),
-          "Generating length-matched shuffled sequences from foreground sequences")
-
-    # write to output FASTA file
-    outfnh = join(outdir,
-                  "{}_dinuc_shuffled_len_matched_bkg_seqs.fasta".
-                  format(args.protein_name))
-    with open(outfnh, "w") as outf:
-        for header, seq in fg_seqs.items():
-            outf.write(">dinuc_shuffled_len_matched_bkg_for_{}\n".format(header))
-            shuffled = dinuclShuffle(seq)
-            outf.write("{}\n".format(shuffled))
 
 
 if __name__ == "__main__":
