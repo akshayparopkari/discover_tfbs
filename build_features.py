@@ -10,12 +10,10 @@ __version__ = "0.2.4"
 
 import argparse
 from sys import exit
-from os import cpu_count
 from random import sample
-from pprint import pprint
+from time import strftime
 from collections import defaultdict
 from os.path import isfile, abspath
-from time import localtime, strftime
 from itertools import product, starmap
 from utils import parse_fasta, calculate_gc_percent, pac, get_shape_data
 err = []
@@ -39,7 +37,7 @@ try:
     from sklearn.model_selection import train_test_split
     from sklearn.model_selection import GridSearchCV
     from sklearn.model_selection import StratifiedShuffleSplit, permutation_test_score
-    from sklearn.preprocessing import label_binarize
+    from sklearn.preprocessing import label_binarize, RobustScaler
     from sklearn.metrics import roc_curve, auc, precision_recall_curve,\
         average_precision_score
 except ImportError:
@@ -160,7 +158,12 @@ def f_importances(coef, names: list, file: str, top=-1):
     if top == -1:
         # Show all features
         top = len(names)
-    colors = ["#008000" if c < 0.0 else "#b20000" for c in imp]
+    colors = list()
+    for c in imp:
+        if c < 0.0:
+            colors.append("#008000")
+        else:
+            colors.append("#b20000")
     with mpl.style.context("ggplot"):
         plt.figure(figsize=(10, 8))
         plt.barh(range(top), imp[::-1][0:top], align="center", color=colors)
@@ -194,13 +197,14 @@ def permutation_result(estimator, X, y, cv, n_permute, random_state, file: str):
     :type file: str
     :param file: Path and file name to save the bar plot
     """
+    print(strftime("%x %X:"), "Starting permutation testing")
     score, permutation_score, p_value = permutation_test_score(estimator, X, y,
                                                                scoring="average_precision",
                                                                cv=cv,
                                                                n_permutations=n_permute,
                                                                n_jobs=-1,
                                                                random_state=random_state)
-    print(strftime("%x %X:".format(localtime)),
+    print(strftime("%x %X:"),
           "Linear SVM classification score {0:0.03f} (pvalue : {1:0.05f})".
           format(score, p_value))
     with mpl.style.context("ggplot"):
@@ -227,7 +231,7 @@ def main():
     try:
         assert isfile(args.fg_fasta_file)
         assert isfile(args.bkg_fasta_file)
-        # assert isfile(args.test_fasta_file)
+        assert len(set(args.genome_wide_shape_fasta_file)) == 5
     except AssertionError as e:
         print("Input FASTA file(s) does not exist. Please check supplied FASTA file - {}"
               .format(e))
@@ -236,11 +240,11 @@ def main():
     #######################################
     # FOREGROUND SEQUENCE PROCESSING #
     #######################################
-    print("\n", strftime("%x %X:".format(localtime)), "Processing foreground FASTA file")
+    print("\n", strftime("%x %X:"), "Processing foreground FASTA file")
     print("=" * 53, sep="\n")
 
     # get all foreground sequences
-    print(strftime("%x %X:".format(localtime)), "Reading FASTA file")
+    print(strftime("%x %X:"), "Reading FASTA file")
     fg_seqs = defaultdict(dict)
     fg_seqs[args.protein_name]["header"] = np.asarray([name
                                                        for name, seq in
@@ -250,13 +254,13 @@ def main():
                                                      parse_fasta(args.fg_fasta_file)])
 
     # get GC percent for all foreground sequences
-    print(strftime("%x %X:".format(localtime)), "Calculating GC percent")
+    print(strftime("%x %X:"), "Calculating GC percent")
     fg_gc = {tf: map_headers_to_values(data["header"],
                                        list(map(calculate_gc_percent, data["seqs"])))
              for tf, data in fg_seqs.items()}
 
     # calculating poisson based metrics
-    print(strftime("%x %X:".format(localtime)), "Calculating Poisson based metrics")
+    print(strftime("%x %X:"), "Calculating Poisson based metrics")
     fg_seq_pairs = all_possible_seq_pairs(fg_seqs[args.protein_name]["seqs"],
                                           fg_seqs[args.protein_name]["seqs"])
     fg_poisson_metrics = np.asarray([np.asarray(list(starmap(pac, pair_set))).
@@ -267,12 +271,12 @@ def main():
                                    fg_poisson_metrics)
 
     # collate all DNA shape values
-    print(strftime("%x %X:".format(localtime)), "Processing DNA shape data")
+    print(strftime("%x %X:"), "Processing DNA shape data")
     fg_shapes = get_shape_data(args.fg_bed_file,
                                args.genome_wide_shape_fasta_file)
 
     # create dataframe of all features for positive training data
-    print(strftime("%x %X:".format(localtime)), "Creating positive training dataset\n")
+    print(strftime("%x %X:"), "Creating positive training dataset\n")
     gc_data_df = pd.DataFrame.from_dict(fg_gc[args.protein_name], orient="index",
                                         columns=["gc_percent"])
     pac_data_df = pd.DataFrame.from_dict(fg_pac, orient="index",
@@ -287,11 +291,11 @@ def main():
     ##################################
     # BACKGROUND SEQUENCE PROCESSING #
     ##################################
-    print(strftime("%x %X:".format(localtime)), "Processing background FASTA file")
+    print(strftime("%x %X:"), "Processing background FASTA file")
     print("=" * 52, sep="\n")
 
     # get all background sequences
-    print(strftime("%x %X:".format(localtime)), "Reading FASTA file")
+    print(strftime("%x %X:"), "Reading FASTA file")
     bkg_seqs = defaultdict(dict)
     bkg_seqs[args.protein_name]["header"] = np.asarray([name
                                                        for name, seq in
@@ -301,13 +305,13 @@ def main():
                                                      parse_fasta(args.bkg_fasta_file)])
 
     # get GC percent for all background sequences
-    print(strftime("%x %X:".format(localtime)), "Calculating GC percent")
+    print(strftime("%x %X:"), "Calculating GC percent")
     bkg_gc = {tf: map_headers_to_values(data["header"],
                                         list(map(calculate_gc_percent, data["seqs"])))
               for tf, data in bkg_seqs.items()}
 
     # calculating poisson based metrics
-    print(strftime("%x %X:".format(localtime)), "Calculating Poisson based metrics")
+    print(strftime("%x %X:"), "Calculating Poisson based metrics")
     bkg_seq_pairs = all_possible_seq_pairs(bkg_seqs[args.protein_name]["seqs"],
                                            fg_seqs[args.protein_name]["seqs"])
     bkg_poisson_metrics = np.asarray([np.asarray(list(starmap(pac, pair_set))).
@@ -318,7 +322,7 @@ def main():
                                     bkg_poisson_metrics)
 
     # collate all DNA shape values
-    print(strftime("%x %X:".format(localtime)), "Processing DNA shape data")
+    print(strftime("%x %X:"), "Processing DNA shape data")
     bkg_shapes = dict()
     for shapefile in args.bkg_shape_fasta_file:
         whichshape = shapefile.split(".")[-1]
@@ -341,7 +345,7 @@ def main():
                     bkg_shapes[name][position] = float(shape[i])
 
     # collect balanced dataset for training and prediction
-    print(strftime("%x %X:".format(localtime)), "Creating negative training dataset\n")
+    print(strftime("%x %X:"), "Creating negative training dataset\n")
     if args.cross_validation == "roc":
         sample_count = len(fg_seqs[args.protein_name]["seqs"])  # number of fg seqs
         negative_sample_list = sample(list(bkg_seqs[args.protein_name]["header"]),
@@ -382,7 +386,7 @@ def main():
     # TRAINING DATA PROCESSING #
     ############################
     print("*" * 53, sep="\n")
-    print(strftime("%x %X:".format(localtime)), "Starting data training")
+    print(strftime("%x %X:"), "Starting data training")
     random_state = np.random.RandomState(0)
     training_data = pd.concat([positive_data_df, negative_data_df], sort=False)
     training_data = training_data.dropna(axis=1)  # drop columns with any NaN
@@ -393,11 +397,12 @@ def main():
     else:
         # don't exclude seq type for accuracy check
         X = training_data.iloc[:, 1: training_data.shape[1]].values
+    X = RobustScaler().fit_transform(X)
     y = training_data["seq_type"].values
     y = np.ravel(label_binarize(y, classes=["Not_True", "True"]))
 
     # tuning parameters for SVC
-    print(strftime("%x %X:".format(localtime)), "Tuning training data parameters")
+    print(strftime("%x %X:"), "Tuning training data parameters")
     C_range = np.logspace(-10, 10, base=2)
     param_grid = dict(C=C_range)
     cv = StratifiedShuffleSplit(n_splits=10, test_size=0.2, random_state=random_state)
@@ -407,7 +412,7 @@ def main():
 
     # Permutation test to calculate significance of model accuracy
     if args.permute:
-        print(strftime("%x %X:".format(localtime)),
+        print(strftime("%x %X:"),
               "Performing permutation test to assess model accuracy for {}".
               format(args.protein_name))
         permutation_result(svc, X, y, cv, args.permute, random_state, args.savefile)
@@ -419,13 +424,13 @@ def main():
         prediction_data = {name: seq for name, seq in parse_fasta(args.predict)}
 
         # calculating GC content and poisson based metrics
-        print(strftime("%x %X:".format(localtime)), "Prediction - calculating GC percent")
+        print(strftime("%x %X:"), "Prediction - calculating GC percent")
         pred_gc = map_headers_to_values(prediction_data.keys(),
                                         np.fromiter(map(calculate_gc_percent,
                                                         prediction_data.values()),
                                                     float))
 
-        print(strftime("%x %X:".format(localtime)),
+        print(strftime("%x %X:"),
               "Prediction - calculating Poisson based metrics")
         prediction_data_pairs = all_possible_seq_pairs(prediction_data.values(),
                                                        fg_seqs[args.protein_name]["seqs"])
@@ -435,13 +440,13 @@ def main():
         pred_pac = map_headers_to_values(prediction_data.keys(),
                                          pred_poisson_metrics)
 
-        print(strftime("%x %X:".format(localtime)),
+        print(strftime("%x %X:"),
               "Prediction - processing DNA shape data")
         pred_shapes = get_shape_data(args.predict_bed_file,
                                      args.genome_wide_shape_fasta_file)
 
         # collect data in DataFrame
-        print(strftime("%x %X:".format(localtime)), "Creating prediction dataset")
+        print(strftime("%x %X:"), "Creating prediction dataset")
         gc_data_df = pd.DataFrame.from_dict(pred_gc, orient="index",
                                             columns=["gc_percent"])
         pac_data_df = pd.DataFrame.from_dict(pred_pac, orient="index",
@@ -458,12 +463,12 @@ def main():
         except AssertionError:
             # NaNs detected in input dataset, remove rows with NaNs
             prediction_data_df = prediction_data_df.dropna()
-#         prediction_data_features = prediction_data_df.iloc[:, 1: prediction_data_df.shape[1]].values
         prediction_data_features = prediction_data_df.to_numpy()
+        prediction_data_features = RobustScaler().fit_transform(prediction_data_features)
         pred_results = svc.fit(X, y).predict(prediction_data_features)
 
-        print(strftime("%x %X:".format(localtime)),
-              "Saving feature importance ranking plot to {}\n".
+        print(strftime("%x %X:"),
+              "Saving feature importance ranking plot to {}".
               format(abspath(args.savefile)))
         f_importances(svc.coef_, [entry.replace("_", " ").replace("pos ", "P")
                                   for entry in prediction_data_df.columns.values],
@@ -472,7 +477,7 @@ def main():
 
         # print positive predictions in BED format
         # 1.chrom 2.chromStart 3.chromEnd 4.name 5.score 6.strand
-        print(strftime("%x %X:".format(localtime)),
+        print(strftime("%x %X:"),
               "Writing positive prediction results to {}\n".
               format(abspath(args.output_file)))
         with open(args.output_file, "w") as pred_out:
@@ -493,7 +498,7 @@ def main():
         tprs = []
         aucs = []
         mean_fpr = np.linspace(0, 1, 100)
-        print(strftime("%x %X:".format(localtime)), "Plotting and saving ROC data\n")
+        print(strftime("%x %X:"), "Plotting and saving ROC data\n")
         with mpl.style.context("ggplot"):
             plt.figure(figsize=(7, 7))
             for train, test in cv.split(X, y):
@@ -529,7 +534,7 @@ def main():
                         pad_inches=0.1)
     elif args.cross_validation == "prc":
         # return PRC plots
-        print(strftime("%x %X:".format(localtime)), "Plotting and saving PRC data\n")
+        print(strftime("%x %X:"), "Plotting and saving PRC data\n")
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25,
                                                             random_state=random_state)
