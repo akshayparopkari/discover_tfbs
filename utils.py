@@ -491,7 +491,7 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
                      seq = data[chrom][int(start): int(end) + 1]
                  for i in range(len(seq)):
                      position = "{0}_pos_{1}".format(shape, i + 1)
-                     if seq[i] == "NA":
+                     if isinstance(seq[i], str):
                          # no shape data calculated, use 0.0
                          genome_shape[name][position] = 0.0
                      else:
