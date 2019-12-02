@@ -158,6 +158,7 @@ def f_importances(coef, names: list, file: str, top=-1):
         plt.figure(figsize=(10, 8))
         plt.barh(range(top), imp[::-1][0:top], align="center", color=colors)
         plt.yticks(range(top), names[::-1][0:top], fontsize=10)
+        plt.tight_layout()
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
@@ -204,12 +205,12 @@ def permutation_result(estimator, X, y, cv, n_permute, random_state, file: str):
                    linewidth=2, label='50/50 chance')
         plt.vlines(2 * [score], 0, ylim, linewidth=3, colors="g")
         score_text = "Model Score\n{:0.03f}*".format(score)
-        plt.text(score - 0.05, ylim + 0.05, score_text, ma="center")
+        plt.text(score - 0.05, ylim + 0.075, score_text, ma="center")
         plt.xlim(0.0, 1.0)
         plt.legend(loc=2)
-        plt.tight_layout()
         plt.xlabel("Average precision scores")
         plt.ylabel("Frequency")
+        plt.tight_layout()
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
