@@ -29,6 +29,10 @@ try:
 except ImportError:
     err.add("urllib3")
 try:
+    import numpy as np
+except ImportError:
+    err.add("numpy")
+try:
     import pandas as pd
 except ImportError:
     err.add("pandas")
@@ -474,7 +478,7 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
          genome_shape = dict()
          for line in inbed:
              chrom, start, end, name, score, strand = tuple(line.strip().split("\t"))
-             name = "|".join([chrom, start, end, name, score, strand])
+             name = chrom + ":" + start + "-" + end + "(" + strand +")"
              if not genome_shape.get(name):
                  # key doesn't exist, create key as new entry
                  genome_shape[name] = dict()
