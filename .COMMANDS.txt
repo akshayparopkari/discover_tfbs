@@ -273,3 +273,32 @@ python discover_tfbs/build_features.py fg_seqs/brg1_fg_seqs.fasta new_bkg_seqs/b
 python discover_tfbs/build_features.py fg_seqs/efg1_fg_seqs.fasta new_bkg_seqs/efg1_all_bkg_combined.fasta efg1 -fsff fg_seqs_shape/efg1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/efg1_all_bkg_combined.fasta.* -p genome_wide_blastn_results/efg1_curated_motifs_blastn_matches_CA_A22.fasta -psff genome_wide_blastn_results/efg1_curated_motifs_blastn_matches_CA_A22.fasta.* -s prediction_outputs/efg1_svm_permutation_result.pdf
 python discover_tfbs/build_features.py fg_seqs/ndt80_fg_seqs.fasta new_bkg_seqs/ndt80_all_bkg_combined.fasta ndt80 -fsff fg_seqs_shape/ndt80_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/ndt80_all_bkg_combined.fasta.* -p genome_wide_blastn_results/ndt80_curated_motifs_blastn_matches_CA_A22.fasta -psff genome_wide_blastn_results/ndt80_curated_motifs_blastn_matches_CA_A22.fasta.* -s prediction_outputs/ndt80_svm_permutation_result.pdf
 python discover_tfbs/build_features.py fg_seqs/rob1_fg_seqs.fasta new_bkg_seqs/rob1_all_bkg_combined.fasta rob1 -fsff fg_seqs_shape/rob1_fg_seqs.fasta.* -bsff new_bkg_seqs_shapes/rob1_all_bkg_combined.fasta.* -p genome_wide_blastn_results/rob1_curated_motifs_blastn_matches_CA_A22.fasta -psff genome_wide_blastn_results/rob1_curated_motifs_blastn_matches_CA_A22.fasta.* -s prediction_outputs/rob1_svm_permutation_result.pdf
+
+
+# Convert multiline shape FASTA files to single line FASTA file. This is needed for Bedtools to collect shapes of blastn matches for non-tec1 proteins.
+cd data/ca_biofilm/genome_files/
+
+for f in C_albicans_SC5314_A22_current_chromosomes.fasta.[HEMPR]*; do echo -e "-->  Processing $f  <--"; outfnh=$(basename "$f" | cut -d. -f1); shape=$(basename "$f" | cut -d. -f3); awk '/^>/ { if(NR>1) print "";  printf("%s\n",$0); next; } { printf("%s,",$0);}  END {printf("\n");}' < "$f" > "${outfnh}_oneline.fasta.${shape}"; echo -e "${outfnh}_oneline.fasta.${shape}\n"; done
+-->  Processing C_albicans_SC5314_A22_current_chromosomes.fasta.EP  <--
+C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.EP
+
+-->  Processing C_albicans_SC5314_A22_current_chromosomes.fasta.HelT  <--
+C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.HelT
+
+-->  Processing C_albicans_SC5314_A22_current_chromosomes.fasta.MGW  <--
+C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.MGW
+
+-->  Processing C_albicans_SC5314_A22_current_chromosomes.fasta.ProT  <--
+C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.ProT
+
+-->  Processing C_albicans_SC5314_A22_current_chromosomes.fasta.Roll  <--
+C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.Roll
+
+
+# liftOver Assembly 21 bound sites to Assembly 22 hapA sites
+liftOver Bcr1_motifs.bed ../genome_files/Assembly21_To_Assembly22_hapA.over.chain ca22_true_motifs/bcr1_true_sites.bed bcr1_unmapped_ca22_sites.txt -bedPlus=6 -tab
+liftOver Brg1_motifs.bed ../genome_files/Assembly21_To_Assembly22_hapA.over.chain ca22_true_motifs/brg1_true_sites.bed brg1_unmapped_ca22_sites.txt -bedPlus=6 -tab
+liftOver Efg1_motifs.bed ../genome_files/Assembly21_To_Assembly22_hapA.over.chain ca22_true_motifs/efg1_true_sites.bed efg1_unmapped_ca22_sites.txt -bedPlus=6 -tab
+liftOver Rob1_motifs.bed ../genome_files/Assembly21_To_Assembly22_hapA.over.chain ca22_true_motifs/rob1_true_sites.bed rob1_unmapped_ca22_sites.txt -bedPlus=6 -tab
+liftOver Tec1_motifs.bed ../genome_files/Assembly21_To_Assembly22_hapA.over.chain ca22_true_motifs/tec1_true_sites.bed tec1_unmapped_ca22_sites.txt -bedPlus=6 -tab
+liftOver Ndt80_motifs.bed ../genome_files/Assembly21_To_Assembly22_hapA.over.chain ca22_true_motifs/ndt80_true_sites.bed ndt80_unmapped_ca22_sites.txt -bedPlus=6 -tab
