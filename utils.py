@@ -5,7 +5,7 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.8"
+__version__ = "0.1.9"
 
 
 # imports
@@ -443,6 +443,57 @@ def bed_to_fasta(inbed, genome_file, outfasta):
     kwargs = shlex.split(get_fasta)
     print("Running {0}".format(get_fasta))
     sp.run(kwargs, check=True)
+
+
+@profile
+def get_shape_data(bedfile: str, shapefiles: list) -> dict:
+     """
+     Using binding data BED file and shape files, retrieve DNA shape of each bound or
+     potential binding site.
+
+     :param bedfile: Input BED file containing true or potential binding site
+                     Ca22chr1 29234233 29346234 protein104 3.0295 -
+
+     :param shapefile: Input shape files in FASTA format, which are output from DNAshapeR
+                       getShape() function
+                       >Ca22chr1A
+                       -2.44,-3.63,-1.59,4.15,-2.36,4.19,-1.99, ...
+     """
+     # read all shape files into a dict
+     print(strftime("%x %X:".format(localtime)), "Parsing DNA shape files")
+     shape_data = defaultdict(lambda: defaultdict())
+     for file in shapefiles:
+         whichshape = file.split(".")[-1]
+         with open(file, "r") as infasta:
+             shape_data[whichshape] = {header: np.array(seq.split(","))
+                                       for header, seq in sfp(infasta)}
+
+     # parse BED file and get DNA shape of features listed in BED file
+     print(strftime("%x %X:".format(localtime)), "Retrieving DNA shape data")
+     with open(bedfile, "r") as inbed:
+         genome_shape = dict()
+         for line in inbed:
+             chrom, start, end, name, score, strand = tuple(line.strip().split("\t"))
+             name = "|".join([chrom, start, end, name, score, strand])
+             if not genome_shape.get(name):
+                 # key doesn't exist, create key as new entry
+                 genome_shape[name] = dict()
+             for shape, data in shape_data.items():
+                 if strand == "-":
+                     # negative strand, get shape data in reverse order
+                     seq = data[chrom][int(end): int(start) - 1: -1]
+                 else:
+                     # positive strand
+                     seq = data[chrom][int(start): int(end) + 1]
+                 for i in range(len(seq)):
+                     position = "{0}_pos_{1}".format(shape, i + 1)
+                     if seq[i] == "NA":
+                         # no shape data calculated, use 0.0
+                         genome_shape[name][position] = 0.0
+                     else:
+                         # retrieve shape value
+                         genome_shape[name][position] = float(seq[i])
+     return genome_shape
 
 
 @profile
