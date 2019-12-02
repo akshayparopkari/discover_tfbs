@@ -302,3 +302,6 @@ liftOver Efg1_motifs.bed ../genome_files/Assembly21_To_Assembly22_hapA.over.chai
 liftOver Rob1_motifs.bed ../genome_files/Assembly21_To_Assembly22_hapA.over.chain ca22_true_motifs/rob1_true_sites.bed rob1_unmapped_ca22_sites.txt -bedPlus=6 -tab
 liftOver Tec1_motifs.bed ../genome_files/Assembly21_To_Assembly22_hapA.over.chain ca22_true_motifs/tec1_true_sites.bed tec1_unmapped_ca22_sites.txt -bedPlus=6 -tab
 liftOver Ndt80_motifs.bed ../genome_files/Assembly21_To_Assembly22_hapA.over.chain ca22_true_motifs/ndt80_true_sites.bed ndt80_unmapped_ca22_sites.txt -bedPlus=6 -tab
+
+# Using newer way to retrieve DNA shapes, predict TFBS and weights of features
+python discover_tfbs/build_features.py fg_seqs/tec1_fg_seqs2.fasta new_bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fbf fg_seqs/tec1_true_sites.bed -bsff new_bkg_seqs_shapes/tec1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -p genome_wide_blastn_results/tec1_curated_motifs_blastn_matches_CA_A22.fasta -pbf genome_wide_blastn_results/tec1_curated_motifs_blastn_matches_CA_A22.bed -s prediction_outputs/tec1_svm_weights2.pdf -o prediction_outputs/tec1_positive_predictions2.bed
