@@ -11,7 +11,6 @@ __version__ = "0.1.4"
 import argparse
 from sys import exit
 from os import mkdir
-from pprint import pprint
 from random import choices, random
 from collections import defaultdict
 from time import localtime, strftime

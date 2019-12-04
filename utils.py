@@ -18,16 +18,12 @@ from urllib.parse import parse_qs
 from urllib.request import urlopen
 from time import localtime, strftime
 from collections import defaultdict, Counter as cnt
-from os.path import join, realpath, isfile, basename
+from os.path import join, abspath, realpath, isfile, basename
 err = set()
 try:
     import shlex as sh
 except ImportError:
     err.add("shlex")
-try:
-    from urllib3 import PoolManager
-except ImportError:
-    err.add("urllib3")
 try:
     import numpy as np
 except ImportError:
@@ -109,17 +105,17 @@ def dna_iupac_codes(seq):
 @profile
 def get_ca_chrom_seq(url="http://www.candidagenome.org/download/sequence/C_albicans_SC5314/Assembly22/current/C_albicans_SC5314_A22_current_chromosomes.fasta.gz",
                      outfile="./C_albicans_SC5314_A22_current_chromosomes.fasta.gz"):
-     """
-     Download Candida albicans chromosome sequence FASTA file from Candida genome
-     database (CGD)
+    """
+    Download Candida albicans chromosome sequence FASTA file from Candida genome
+    database (CGD)
 
-     :param url: URL of Gzipped file from CGD
+    :param url: URL of Gzipped file from CGD
 
-     :param outfile: File name and location to save chromosomal sequences from CGD
-     """
-     with urlopen(url) as response, open(outfile, "wb") as outf:
-         for chunk in response.stream():
-             outf.write(chunk)
+    :param outfile: File name and location to save chromosomal sequences from CGD
+    """
+    with urlopen(url) as response, open(outfile, "wb") as outf:
+        for chunk in response.stream():
+            outf.write(chunk)
 
 
 def parse_fasta(fasta_file):
@@ -193,33 +189,37 @@ def calculate_gc_percent(sequence: str) -> float:
 
 @profile
 def download_ca_a22_genome_annot(outfile="C_albicans_SC5314_A22_current_features.gff"):
-     """
-     Download the latest genome GFF file for Candida albicans SC5314 from Candida Genome
-     Database. Data is located at
-     http://www.candidagenome.org/download/gff/C_albicans_SC5314/Assembly22/C_albicans_SC5314_A22_current_features.gff
-     As per CGD - This file contains the current CGD annotation of all features in GFF
-     based on Assembly 22 of the C. albicans SC5314 genome sequence.
+    """
+    Download the latest genome GFF file for Candida albicans SC5314 from Candida Genome
+    Database. Data is located at
+    http://www.candidagenome.org/download/gff/C_albicans_SC5314/Assembly22/C_albicans_SC5314_A22_current_features.gff
+    As per CGD - This file contains the current CGD annotation of all features in GFF
+    based on Assembly 22 of the C. albicans SC5314 genome sequence.
 
-     :type outfile: str
-     :param outfile: File name used to save the CGD genome annotations. Be default, the
-                     file is saved in current directory as
-                     C_albicans_SC5314_A22_current_features.gff
-     """
-     # set download URL
-     gff_url = "http://www.candidagenome.org/download/gff/C_albicans_SC5314/Assembly22/C_albicans_SC5314_A22_current_features.gff"
+    :type outfile: str
+    :param outfile: File name used to save the CGD genome annotations. Be default, the
+                 file is saved in current directory as
+                 C_albicans_SC5314_A22_current_features.gff
+    """
+    try:
+        from urllib3 import PoolManager
+    except AssertionError:
+        exit("Please install urllib3 package")
+    # set download URL
+    gff_url = "http://www.candidagenome.org/download/gff/C_albicans_SC5314/Assembly22/C_albicans_SC5314_A22_current_features.gff"
 
-     print("Getting GFF file content")
-     gff_data = http.request("GET", gff_url, preload_content=False)
+    print("Getting GFF file content")
+    gff_data = PoolManager().request("GET", gff_url, preload_content=False)
 
-     # settle output file name handle
-     outfnh = abspath(join("./", outfile))
+    # settle output file name handle
+    outfnh = abspath(join("./", outfile))
 
-     # write GFF content to file
-     print("Saving GFF file")
-     with open(outfnh, "wb") as outf:
-         for chunk in gff_data.stream():
-             outf.write(chunk)
-     print("GFF file saved at {0}".format(outfnh))
+    # write GFF content to file
+    print("Saving GFF file")
+    with open(outfnh, "wb") as outf:
+        for chunk in gff_data.stream():
+            outf.write(chunk)
+    print("GFF file saved at {0}".format(outfnh))
 
 
 @profile
@@ -451,53 +451,53 @@ def bed_to_fasta(inbed, genome_file, outfasta):
 
 @profile
 def get_shape_data(bedfile: str, shapefiles: list) -> dict:
-     """
-     Using binding data BED file and shape files, retrieve DNA shape of each bound or
-     potential binding site.
+    """
+    Using binding data BED file and shape files, retrieve DNA shape of each bound or
+    potential binding site.
 
-     :param bedfile: Input BED file containing true or potential binding site
-                     Ca22chr1 29234233 29346234 protein104 3.0295 -
+    :param bedfile: Input BED file containing true or potential binding site
+                 Ca22chr1 29234233 29346234 protein104 3.0295 -
 
-     :param shapefile: Input shape files in FASTA format, which are output from DNAshapeR
-                       getShape() function
-                       >Ca22chr1A
-                       -2.44,-3.63,-1.59,4.15,-2.36,4.19,-1.99, ...
-     """
-     # read all shape files into a dict
-     print(strftime("%x %X:".format(localtime)), "Parsing DNA shape files")
-     shape_data = defaultdict(lambda: defaultdict())
-     for file in shapefiles:
-         whichshape = file.split(".")[-1]
-         with open(file, "r") as infasta:
-             shape_data[whichshape] = {header: np.array(seq.split(","))
-                                       for header, seq in sfp(infasta)}
+    :param shapefile: Input shape files in FASTA format, which are output from DNAshapeR
+                   getShape() function
+                   >Ca22chr1A
+                   -2.44,-3.63,-1.59,4.15,-2.36,4.19,-1.99, ...
+    """
+    # read all shape files into a dict
+    print(strftime("%x %X:".format(localtime)), "Parsing DNA shape files")
+    shape_data = defaultdict(lambda: defaultdict())
+    for file in shapefiles:
+        whichshape = file.split(".")[-1]
+        with open(file, "r") as infasta:
+            shape_data[whichshape] = {header: np.array(seq.split(","))
+                                      for header, seq in sfp(infasta)}
 
-     # parse BED file and get DNA shape of features listed in BED file
-     print(strftime("%x %X:".format(localtime)), "Retrieving DNA shape data")
-     with open(bedfile, "r") as inbed:
-         genome_shape = dict()
-         for line in inbed:
-             chrom, start, end, name, score, strand = tuple(line.strip().split("\t"))
-             name = chrom + ":" + start + "-" + end + "(" + strand +")"
-             if not genome_shape.get(name):
-                 # key doesn't exist, create key as new entry
-                 genome_shape[name] = dict()
-             for shape, data in shape_data.items():
-                 if strand == "-":
-                     # negative strand, get shape data in reverse order
-                     seq = data[chrom][int(end): int(start) - 1: -1]
-                 else:
-                     # positive strand
-                     seq = data[chrom][int(start): int(end) + 1]
-                 for i in range(len(seq)):
-                     position = "{0}_pos_{1}".format(shape, i + 1)
-                     if isinstance(seq[i], str):
-                         # no shape data calculated, use 0.0
-                         genome_shape[name][position] = 0.0
-                     else:
-                         # retrieve shape value
-                         genome_shape[name][position] = float(seq[i])
-     return genome_shape
+    # parse BED file and get DNA shape of features listed in BED file
+    print(strftime("%x %X:".format(localtime)), "Retrieving DNA shape data")
+    with open(bedfile, "r") as inbed:
+        genome_shape = dict()
+        for line in inbed:
+            chrom, start, end, name, score, strand = tuple(line.strip().split("\t"))
+            name = chrom + ":" + start + "-" + end + "(" + strand + ")"
+            if not genome_shape.get(name):
+                # key doesn't exist, create key as new entry
+                genome_shape[name] = dict()
+            for shape, data in shape_data.items():
+                if strand == "-":
+                    # negative strand, get shape data in reverse order
+                    seq = data[chrom][int(end): int(start) - 1: -1]
+                else:
+                    # positive strand
+                    seq = data[chrom][int(start): int(end) + 1]
+                for i in range(len(seq)):
+                    position = "{0}_pos_{1}".format(shape, i + 1)
+                    if isinstance(seq[i], str):
+                        # no shape data calculated, use 0.0
+                        genome_shape[name][position] = 0.0
+                    else:
+                        # retrieve shape value
+                        genome_shape[name][position] = float(seq[i])
+    return genome_shape
 
 
 @profile
