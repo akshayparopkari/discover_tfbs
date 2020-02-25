@@ -5,12 +5,13 @@ Create background sequences from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 
 import argparse
 from sys import exit
 from os import mkdir
+from bisect import bisect_left
 from random import choices, random
 from collections import defaultdict
 from time import localtime, strftime
@@ -239,12 +240,15 @@ def main():
 
     # parse genome CDS/exonic regions and collect GC% and length-matched sequences
     cds_exons_len_matched_gc = defaultdict(list)
+    bisection_list = list()   # collecting key list for bisection code in exception below
     for f in args.genome_fasta_files:
         for header, seq in parse_fasta(f):
             for kmer in get_kmers(seq, k=seq_length):
                 gc_content = round(calculate_gc_percent(kmer))
                 dict_key = "gc_{:d}_pc".format(gc_content)
+                bisection_list.append(dict_key)
                 cds_exons_len_matched_gc[dict_key].append(kmer)
+    bisection_list = sorted(bisection_list)
 
     # write to output FASTA file
     outfnh = join(outdir,
@@ -253,7 +257,20 @@ def main():
         for header, gc_pc in fg_gc.items():
             random_header = "gc_len_matched_bkg_for_{}".format(header)
             dict_key = "gc_{:d}_pc".format(gc_pc)
-            random_seq = choices(cds_exons_len_matched_gc[dict_key])[0]
+            try:
+                random_seq = choices(cds_exons_len_matched_gc[dict_key])[0]
+            except Exception:
+                # if dict_key GC percent sequences aren't present in CDS/exonic regions
+                # collect a sequence from the next available higher GC percent bin. E.g.
+                # if [0. 25. 50. 75. 100] are available bins, and foreground sequence has
+                # 62 percent GC content, collect a sequence from 75 percent bin.
+                index = bisect_left(bisection_list, dict_key)
+                if index == 0:
+                    random_seq = choices(cds_exons_len_matched_gc[bisection_list[0]])[0]
+                elif index == len(bisection_list):
+                    random_seq = choices(cds_exons_len_matched_gc[bisection_list[-1]])[0]
+                else:
+                    random_seq = choices(cds_exons_len_matched_gc[bisection_list[index]])[0]
             outf.write(">{0}\n{1}\n".format(random_header, random_seq))
 
 
