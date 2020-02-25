@@ -160,7 +160,7 @@ def f_importances(coef, names: list, file: str, top=-1):
         top = len(names)
     colors = list()
     for c in imp:
-        if c < 0.0:
+        if c < 0.00000000000:
             colors.append("#008000")
         else:
             colors.append("#b20000")
@@ -169,6 +169,34 @@ def f_importances(coef, names: list, file: str, top=-1):
         plt.barh(range(top), imp[::-1][0:top], align="center", color=colors)
         plt.yticks(range(top), names[::-1][0:top], fontsize=10)
         plt.tight_layout()
+        plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
+
+
+def plot_coefficients(coef, feature_names, file: str):
+    """
+    Using the coefficient weights, plot the contribution of each or subset of features in
+    classification. Currently, this function is set up for binary classification.
+
+    :type coef: array-like, list or numpy array
+    :param coef: SVM weights assigned to each feature.
+
+    :type names: list
+    :param names: List of feature names to use for plotting
+
+    :type file: str
+    :param file: Path and name of file to save feature contribution bar plot. The file
+                 will be saved in PDF format.
+    """
+    coef = coef.ravel()
+    feature_names = np.array(feature_names)
+    top_coefficients = np.argsort(coef)
+
+    # create plot
+    with mpl.style.context("ggplot"):
+        plt.figure(figsize=(10, 10))
+        colors = ["#b20000" if c < 0 else "#008000" for c in coef[top_coefficients][::-1]]
+        plt.barh(range(len(coef)), coef[top_coefficients][::-1], color=colors, hatch="/",
+                 tick_label=feature_names[top_coefficients][::-1])
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
@@ -470,9 +498,9 @@ def main():
         print(strftime("%x %X:"),
               "Saving feature importance ranking plot to {}".
               format(abspath(args.savefile)))
-        f_importances(svc.coef_, [entry.replace("_", " ").replace("pos ", "P")
-                                  for entry in prediction_data_df.columns.values],
-                      args.savefile)
+        feature_names = [entry.replace("_", " ").replace("pos ", "P")
+                         for entry in prediction_data_df.columns.values]
+        plot_coefficients(svc.coef_, feature_names, args.savefile)  # get top 20 features
         positive_pred_orfs = prediction_data_df.index.values[np.where(pred_results)]
 
         # print positive predictions in BED format
