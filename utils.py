@@ -5,21 +5,31 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.9"
+__version__ = "0.2.0"
 
 
 # imports
 from sys import exit
 import subprocess as sp
+from time import strftime
 from random import choices
-from itertools import product
 from functools import lru_cache
 from urllib.parse import parse_qs
 from urllib.request import urlopen
-from time import localtime, strftime
+from itertools import product, starmap
 from collections import defaultdict, Counter as cnt
 from os.path import join, abspath, realpath, isfile, basename
 err = set()
+try:
+    from sklearn.model_selection import permutation_test_score
+except ImportError:
+    err.append("scikit-learn")
+try:
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    plt.switch_backend('agg')
+except ImportError:
+    err.append("matplotlib")
 try:
     import shlex as sh
 except ImportError:
@@ -75,7 +85,7 @@ def random_dna(n=25, ambiguous=True):
 
 
 @profile
-def reverse_complement(seq):
+def reverse_complement(seq: str):
     """
     For an input sequence, this function returns its reverse complement.
 
@@ -87,7 +97,7 @@ def reverse_complement(seq):
 
 
 @profile
-def dna_iupac_codes(seq):
+def dna_iupac_codes(seq: str):
     """
     Given a DNA sequence, return all possible degenerate sequences.
 
@@ -118,7 +128,7 @@ def get_ca_chrom_seq(url="http://www.candidagenome.org/download/sequence/C_albic
             outf.write(chunk)
 
 
-def parse_fasta(fasta_file):
+def parse_fasta(fasta_file: str):
     """
     Parse a FASTA file for easy access.
 
@@ -138,11 +148,12 @@ def parse_fasta(fasta_file):
                 for header, sequence in sfp(input_fasta):
                     yield header, sequence
         except StopIteration:
+            # end of FASTA file, exit
             return
 
 
 @profile
-def bkg_gc(bkg_fasta, outdir):
+def bkg_gc(bkg_fasta: str, outdir: str):
     """
     Parse input FASTA file, spread out sequences based on GC percent content
     into separate file. If seqA is 35% and seqB is 89%, they will saved in
@@ -243,11 +254,13 @@ def split_file(fnh: str, nlines=50000):
 
 
 @profile
-def parse_blastn_results(f):
+def parse_blastn_results(f: str):
     """
     Get blastn results in a dict.
+
+    :param f: Blastn output file
     """
-    print("{}: PARSING BLASTn RESULTS".format(strftime("%m/%d/%Y %H:%M:%S", localtime())))
+    print(strftime("%x %X: PARSING BLASTn RESULTS"))
     blastn_results = dict()
     tf_name = basename(f).split("_")[0]
     print("PROCESSING {}".format(tf_name.upper()))
@@ -303,7 +316,7 @@ def parse_blastn_results(f):
 
 
 @profile
-def get_kmers(seq, k=6):
+def get_kmers(seq: str, k=6):
     """
     Generate kmers from a given sequence. By default, this function will generate 6-mers
     from the given sequence. Function will return an error if kmer length is greater than
@@ -330,7 +343,7 @@ def get_kmers(seq, k=6):
 
 
 @profile
-def get_kmer_counts(seq, k=6):
+def get_kmer_counts(seq: str, k=6):
     """
     For an input sequence, return counts for all kmers in dict keyed on kmer,
     and its counts as the value
@@ -355,7 +368,7 @@ def get_kmer_counts(seq, k=6):
 
 
 @profile
-def blast_to_bed(infile, outfile):
+def blast_to_bed(infile: str, outfile: str):
     """
     Convert a tabular BLAST format to BED6 format.
 
@@ -388,7 +401,7 @@ def blast_to_bed(infile, outfile):
 
 
 @profile
-def sort_bed_file(inbed, outbed):
+def sort_bed_file(inbed: str, outbed: str):
     """
     Sort input BED6 file first by chromosome and then by starting position.
 
@@ -414,7 +427,7 @@ def sort_bed_file(inbed, outbed):
 
 
 @profile
-def bed_to_fasta(inbed, genome_file, outfasta):
+def bed_to_fasta(inbed: str, genome_file: str, outfasta: str):
     """
     Convert a BED6 file to FASTA file using bedtools' getfasta function'.
 
@@ -464,7 +477,7 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
                    -2.44,-3.63,-1.59,4.15,-2.36,4.19,-1.99, ...
     """
     # read all shape files into a dict
-    print(strftime("%x %X:".format(localtime)), "Parsing DNA shape files")
+    print(strftime("%x %X: Parsing DNA shape files"))
     shape_data = defaultdict(lambda: defaultdict())
     for file in shapefiles:
         whichshape = file.split(".")[-1]
@@ -473,7 +486,7 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
                                       for header, seq in sfp(infasta)}
 
     # parse BED file and get DNA shape of features listed in BED file
-    print(strftime("%x %X:".format(localtime)), "Retrieving DNA shape data")
+    print(strftime("%x %X: Retrieving DNA shape data"))
     with open(bedfile, "r") as inbed:
         genome_shape = dict()
         for line in inbed:
@@ -491,7 +504,7 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
                     seq = data[chrom][int(start): int(end) + 1]
                 for i in range(len(seq)):
                     position = "{0}_pos_{1}".format(shape, i + 1)
-                    if isinstance(seq[i], str):
+                    if seq[i] == "NA":
                         # no shape data calculated, use 0.0
                         genome_shape[name][position] = 0.0
                     else:
@@ -501,8 +514,8 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
 
 
 @profile
-def parse_gff_fasta(gff_file, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta", genome="22",
-                    feature="CDS"):
+def parse_gff_fasta(gff_file: str, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta",
+                    genome="22", feature="CDS"):
     """
     Parses a GFF and fasta data (output from parse_fasta()) of a genome and collect
     sequences of certain feature in GFF file. By default, this function will return all
@@ -618,7 +631,7 @@ def get_start_prob(fasta_file, verbose=False):
 
 
 @profile
-def get_transmat(fasta_file, n=5):
+def get_transmat(fasta_file: str, n=5):
     """
     From a FASTA file, generate nth order Markov chain transition probability matrix. By
     default, a 5th order Markov chain transition matrix will be calculated and returned as
@@ -740,3 +753,109 @@ def pac(seqA: str, seqB: str):
     prod = 1 - (prod ** (1 / n_patterns))
     similarity = similarity / n_patterns
     return similarity, prod
+
+
+@profile
+def permutation_result(estimator, X, y, cv, n_permute, random_state, file: str):
+    """
+    Run permutation tests for classifier and assess significance of accuracy score. This
+    is a wrapper around sklearn.model_selection.permutation_test_score
+
+    :type estimator: scikit-learn classifier object
+    :param estimator: Instance of scikit-learn initialized classifier which has a 'fit'
+                      method
+
+    :type X: array-like, list or numpy array
+    :param X: Numpy array of features - columns of feature table
+
+    :type y: array-like, list or numpy array
+    :param y: Class labels of each row in X
+
+    :type cv: int, iterable
+    :param cv: If integer, those many cross validations are run. User can also supply an
+               iterable to create (train, test) splits using indices.
+
+    :type random_state: numpy random object
+    :param random_state: Seed to use for multiple reproducible runs
+
+    :type file: str
+    :param file: Path and file name to save the bar plot
+    """
+    print(strftime("%x %X: Starting permutation testing"))
+    score, permutation_score, p_value = permutation_test_score(estimator, X, y,
+                                                               scoring="average_precision",
+                                                               cv=cv,
+                                                               n_permutations=n_permute,
+                                                               n_jobs=-1,
+                                                               random_state=random_state)
+    print(strftime("%x %X:"),
+          "Linear SVM classification score {0:0.03f} (pvalue : {1:0.05f})".
+          format(score, p_value))
+    with mpl.style.context("ggplot"):
+        plt.figure(figsize=(10, 8))
+        plt.hist(permutation_score, bins=25, alpha=0.5, hatch="//", edgecolor="k",
+                 label="Precision scores for shuffled labels")
+        ylim = plt.ylim()[1]
+        plt.vlines(2 * [1. / np.unique(y).size], 0, ylim, linestyle="dashdot",
+                   linewidth=2, label='50/50 chance')
+        plt.vlines(2 * [score], 0, ylim, linewidth=3, colors="g")
+        score_text = "Model Score\n{:0.03f}*".format(score)
+        plt.text(score - 0.05, ylim + 0.075, score_text, ma="center")
+        plt.xlim(0.0, 1.0)
+        plt.legend(loc=2)
+        plt.xlabel("Average precision scores")
+        plt.ylabel("Frequency")
+        plt.tight_layout()
+        plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
+
+
+@profile
+def build_feature_table(infasta: str, truefasta: str, fg_bed_file: str,
+                        genome_wide_shape_fasta_file: list):
+    """
+    Build feature table by calculating/retrieving all relevant characteristics.
+
+    :infasta: Input FASTA file with foreground/true sequences
+
+    :truefasta: FASTA file with true/foreground sequences to be used for calculating
+                Poisson based similarity metrics
+
+    :fg_bed_file: Path to foreground/true binding event BED file. This file must have a
+                  minimum of BED6 format - i.e. chrom start end name score strand columns
+
+    :genome_wide_shape_fasta_file: A list with paths to genome-wide 3D DNA shape
+                                   (DNAShapeR output files) data single-line FASTA format
+                                   files associated with '--predict' parameters
+    """
+    # read in FASTA data
+    print(strftime("%x %X: Reading input FASTA file"))
+    fg_data = {header: seq for header, seq in parse_fasta(infasta)}
+
+    # calculate GC percent for all foreground seqs
+    print(strftime("%x %X: Calculating GC percent"))
+    fg_gc = dict(zip(list(fg_data.keys()),
+                 map(calculate_gc_percent, list(fg_data.values()))))
+    fg_gc_df = pd.DataFrame.from_dict(fg_gc, orient="index", columns=["GC_percent"])
+
+    # calculate poisson based metric
+    print(strftime("%x %X: Calculating Poisson based metrics"))
+    true_seqs = {header: seq for header, seq in parse_fasta(truefasta)}
+    seq_pairs = (list(product([seq], list(true_seqs.values())))
+                 for seq in fg_data.values())
+    fg_poisson_metrics = np.asarray([np.asarray(list(starmap(pac, pair_set))).
+                                     mean(axis=0, dtype=np.float64)
+                                     for pair_set in seq_pairs])
+    fg_pac = dict(zip(fg_data.keys(), fg_poisson_metrics))
+    fg_pac_df = pd.DataFrame.from_dict(fg_pac, orient="index", columns=["PAS", "PPS"])
+
+    # calculate/retrieve shape values
+    print(strftime("%x %X: Processing DNA shape data"))
+    fg_shapes = get_shape_data(fg_bed_file, genome_wide_shape_fasta_file)
+    fg_shapes_df = pd.DataFrame.from_dict(fg_shapes, orient="index")
+
+    # create pandas dataframe and return it
+    training_data_df = fg_gc_df.merge(fg_pac_df, how="outer", left_index=True,
+                                      right_index=True)
+    training_data_df = training_data_df.merge(fg_shapes_df, how="outer", left_index=True,
+                                              right_index=True)
+    return training_data_df
