@@ -359,3 +359,4 @@ for (f in bkg_files) {
 + }
 
 # build features, train SVC model and classify simulated sequences
+build_features.py fg_seqs/tec1_fg_seqs2.fasta new_bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fbf fg_seqs/tec1_true_sites.bed -bsff new_bkg_seqs_shapes/tec1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -p genome_wide_blastn_results/tec1_curated_motifs_blastn_matches_CA_A22.fasta -pbf genome_wide_blastn_results/tec1_curated_motifs_blastn_matches_CA_A22.bed -s pred_results/tec1_svm_weights.pdf -o pred_results/tec1_positive_predictions.bed
