@@ -5,7 +5,7 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 
 # imports
@@ -678,6 +678,24 @@ def get_transmat(fasta_file: str, n=5):
                          for k1, v1 in kmer_counts.items()}
     return pd.DataFrame.from_dict(kmer_prob, orient="index").fillna(0.)
 
+
+@profile
+def markov_next_state(current, transmat):
+     """
+     Using current state of sequence, give the next state based on transition probability
+     matrix
+
+     :type current: str
+     :param current: Current state of the sequence. For nth degree Markov chain, this
+                     parameter must be n-character long
+
+     :type transmat: pandas dataframe
+     :param transmat: Transition probability matrix dataframe. Ideally, this dataframe is
+                      the output from get_transmat() function
+     """
+     states = transmat.columns
+     p = transmat.loc[current]
+     return choice(states, p=p)
 
 @lru_cache(512)
 def _cdf(k: int, mu: float):
