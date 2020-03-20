@@ -360,3 +360,13 @@ for (f in bkg_files) {
 
 # build features, train SVC model and calculate PRC plots
 build_features.py fg_seqs/tec1_fg_seqs2.fasta new_bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fbf fg_seqs/tec1_true_sites.bed -bsff new_bkg_seqs_shapes/tec1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv -s prc_plots/tec1_prc.pdf
+
+#########################################################################################
+Mar. 19th 2020 commands
+
+# create background sequences based on CA22 liftover true sequences
+cd /home/aparopkari/ca_biofilm/job_subs
+find . -type f -name "*_create_bkg_seqs.sub" | xargs -I {} sbatch {}
+
+# build features, train SVC model and calculate PRC plots
+build_features.py fg_seqs/tec1_fg_seqs2.fasta new_bkg_seqs/tec1_all_bkg_combined.fasta tec1 -fbf fg_seqs/tec1_true_sites.bed -bsff new_bkg_seqs_shapes/tec1_all_bkg_combined.fasta.* -gwsf genome_files/C_albicans_SC5314_A22_current_chromosomes_oneline.fasta.* -cv -s prc_plots/tec1_prc.pdf
