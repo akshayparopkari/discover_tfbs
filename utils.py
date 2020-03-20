@@ -5,7 +5,7 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.2.1"
+__version__ = "0.2.4"
 
 
 # imports
@@ -23,19 +23,20 @@ err = set()
 try:
     from sklearn.model_selection import permutation_test_score
 except ImportError:
-    err.append("scikit-learn")
+    err.add("scikit-learn")
 try:
     import matplotlib as mpl
     import matplotlib.pyplot as plt
     plt.switch_backend('agg')
 except ImportError:
-    err.append("matplotlib")
+    err.add("matplotlib")
 try:
     import shlex as sh
 except ImportError:
     err.add("shlex")
 try:
     import numpy as np
+    from numpy.random import choice as npchoice
 except ImportError:
     err.add("numpy")
 try:
@@ -63,7 +64,7 @@ except NameError:
 
 
 @profile
-def random_dna(n=25, ambiguous=True):
+def random_dna(n=25, ambiguous=True) -> str:
     """
     Return a random DNA sequence with ambiguous bases of length 'n'
 
@@ -85,7 +86,7 @@ def random_dna(n=25, ambiguous=True):
 
 
 @profile
-def reverse_complement(seq: str):
+def reverse_complement(seq: str) -> str:
     """
     For an input sequence, this function returns its reverse complement.
 
@@ -97,7 +98,7 @@ def reverse_complement(seq: str):
 
 
 @profile
-def dna_iupac_codes(seq: str):
+def dna_iupac_codes(seq: str) -> list:
     """
     Given a DNA sequence, return all possible degenerate sequences.
 
@@ -109,7 +110,7 @@ def dna_iupac_codes(seq: str):
                    "Y": ["C", "T"], "S": ["G", "C"], "W": ["A", "T"], "K": ["G", "T"],
                    "M": ["A", "C"], "B": ["C", "G", "T"], "D": ["A", "G", "T"],
                    "H": ["A", "C", "T"], "V": ["A", "C", "G"], "N": ["A", "C", "G", "T"]}
-    return list(map("".join, product(*[iupac_codes[nt] for nt in seq])))
+    return list(map("".join, product(*[iupac_codes[nt.upper()] for nt in seq])))
 
 
 @profile
@@ -130,7 +131,7 @@ def get_ca_chrom_seq(url="http://www.candidagenome.org/download/sequence/C_albic
 
 def parse_fasta(fasta_file: str):
     """
-    Parse a FASTA file for easy access.
+    Efficiently parse a FASTA file.
 
     :type fasta_file: str
     :param fasta_file: file path and name handle
@@ -254,7 +255,7 @@ def split_file(fnh: str, nlines=50000):
 
 
 @profile
-def parse_blastn_results(f: str):
+def parse_blastn_results(f: str) -> dict:
     """
     Get blastn results in a dict.
 
@@ -343,7 +344,7 @@ def get_kmers(seq: str, k=6):
 
 
 @profile
-def get_kmer_counts(seq: str, k=6):
+def get_kmer_counts(seq: str, k=6) -> dict:
     """
     For an input sequence, return counts for all kmers in dict keyed on kmer,
     and its counts as the value
@@ -502,8 +503,8 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
                 else:
                     # positive strand
                     seq = data[chrom][int(start): int(end) + 1]
-                for i in range(len(seq)):
-                    position = "{0}_pos_{1}".format(shape, i + 1)
+                for i in range(1, len(seq)):
+                    position = "{0}_pos_{1}".format(shape, i)
                     if seq[i] == "NA":
                         # no shape data calculated, use 0.0
                         genome_shape[name][position] = 0.0
@@ -592,7 +593,7 @@ def parse_gff_fasta(gff_file: str, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta"
 
 
 @profile
-def get_start_prob(fasta_file, verbose=False):
+def get_start_prob(fasta_file, verbose=False) -> dict:
     """
     From a list of sequences, get the background probabilities of adenine(A),
     cytosine (C), guanine(G) and thymine (T)
@@ -680,22 +681,81 @@ def get_transmat(fasta_file: str, n=5):
 
 
 @profile
-def markov_next_state(current, transmat):
-     """
-     Using current state of sequence, give the next state based on transition probability
-     matrix
+def markov_next_state(current: str, transmat) -> str:
+    """
+    Using current state of sequence, give the next state based on transition probability
+    matrix
 
-     :type current: str
-     :param current: Current state of the sequence. For nth degree Markov chain, this
-                     parameter must be n-character long
+    :type current: str
+    :param current: Current state of the sequence. For nth degree Markov chain, this
+                 parameter must be n-character long DNA nucleotide
 
-     :type transmat: pandas dataframe
-     :param transmat: Transition probability matrix dataframe. Ideally, this dataframe is
-                      the output from get_transmat() function
-     """
-     states = transmat.columns
-     p = transmat.loc[current]
-     return choice(states, p=p)
+    :type transmat: pandas dataframe
+    :param transmat: Transition probability matrix dataframe. Ideally, this dataframe is
+                  the output from get_transmat() function
+    """
+    states = transmat.columns
+    p = transmat.loc[current]
+    return npchoice(states, p=p)
+
+
+@profile
+def markov_seq(seq_len: int, bkg_seq: str, transmat) -> str:
+    """
+    Using transition probability matrix and a starting sequence, generate seq_len length
+    sequence from a 2nd order Markov model. The final output sequence will be padded by
+    randomly generated dinucleotides.
+
+    :type seq_len: int
+    :param seq_len: Length of the final sequence
+
+    :type bkg_seq: str
+    :param bkg_seq: Starting DNA nucleotide sequence. A minimum of two nucleotides must be
+                    supplied.
+
+    :type transmat: pandas dataframe
+    :param transmat: Transition probability matrix dataframe. Ideally, this dataframe is
+                     the output from get_transmat() function
+    """
+    for _ in range(seq_len):
+        current = bkg_seq[-2:]
+        bkg_seq += markov_next_state(current, transmat)
+    return bkg_seq + random_dna(2, False)
+
+
+@profile
+def gc_len_matched_bkg_seq_gen(fg_seqs: dict, transmat: dict, tol=5) -> dict:
+    """
+    Using 2nd order Markov model trained on Drosophila melanogaster and Escherichia coli
+    coding sequence regions, generate GC content and length matched background sequence.
+    GC content is allowed a controllable difference of 5% around the GC content of
+    foreground sequence.
+
+    :type fg_seqs: dict
+    :param fg_seqs: Parsed FASTA file of foreground sequences
+
+
+    :type transmat: dict
+    :param transmat: A dict containing all transition probability matrix dataframe.
+                     Ideally, the dataframes will be output from get_transmat()
+    """
+    bkg_seqs = dict()
+    for header, seq in fg_seqs.items():
+        for entry in dna_iupac_codes(seq):
+            gc = round(calculate_gc_percent(seq))
+            seq_len = len(seq)
+            random_key = choices(list(transmat.keys()))[0]
+            while True:
+                bkg_seqs[header] = markov_seq(seq_len,
+                                              random_dna(2, False),
+                                              transmat[random_key])
+                core_seq = bkg_seqs[header][2:-2]
+                if core_seq not in fg_seqs.values():
+                    gc_diff = abs(gc - round(calculate_gc_percent(core_seq)))
+                    if gc_diff <= tol:
+                        break
+    return bkg_seqs
+
 
 @lru_cache(512)
 def _cdf(k: int, mu: float):
@@ -800,12 +860,10 @@ def permutation_result(estimator, X, y, cv, n_permute, random_state, file: str):
     :param file: Path and file name to save the bar plot
     """
     print(strftime("%x %X: Starting permutation testing"))
-    score, permutation_score, p_value = permutation_test_score(estimator, X, y,
-                                                               scoring="average_precision",
-                                                               cv=cv,
-                                                               n_permutations=n_permute,
-                                                               n_jobs=-1,
-                                                               random_state=random_state)
+    score, permutation_score, p_value = permutation_test_score(
+        estimator, X, y, scoring="average_precision", cv=cv, n_permutations=n_permute,
+        n_jobs=-1, random_state=random_state
+        )
     print(strftime("%x %X:"),
           "Linear SVM classification score {0:0.03f} (pvalue : {1:0.05f})".
           format(score, p_value))
