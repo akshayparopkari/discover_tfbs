@@ -5,18 +5,26 @@ Create background sequences from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.5"
+__version__ = "0.2.3"
 
 
 import argparse
 from sys import exit
 from os import mkdir
-from bisect import bisect_left
-from random import choices, random
-from collections import defaultdict
+from random import choices, random, randint
 from time import localtime, strftime
 from os.path import isfile, join, abspath, exists
-from utils import parse_fasta, calculate_gc_percent, get_kmers
+from utils import (dna_iupac_codes, parse_fasta, get_transmat, calculate_gc_percent,
+                   markov_seq, random_dna)
+try:
+    from rpy2.robjects.packages import importr
+except ImportError:
+    exit("\nPlease install rpy2 package.\n")
+else:
+    try:
+        dnashaper = importr("DNAshapeR")
+    except Exception:
+        exit("\nPlease install bioconductor-dnashaper package.\n")
 
 
 def handle_program_options():
@@ -38,6 +46,12 @@ def handle_program_options():
                         "containing sequences with binding motifs. For example, these "
                         "files can be FASTA file of exonic regions of non-related "
                         "species. Please do not supply gzipped files.")
+    parser.add_argument("-t", "--tolerance", type=int, default=2,
+                        help="Percent tolerance allowed for matching GC content of "
+                        "background sequence with foreground sequence. The default value "
+                        "is 2 percent difference between background and foreground "
+                        "sequence. A value of zero will increase eexecution time for this"
+                        " script.")
     parser.add_argument("-o", "--output_dir", type=str,
                         help="Specify a directory to save background sequence data.")
     return parser.parse_args()
@@ -52,21 +66,15 @@ def computeCountAndLists(s):
     # counts only nonoverlapping words UU. For this reason, we work with the indices.
 
     # Initialize lists and mono- and dinucleotide dictionaries
-    List = {}  # List is a dictionary of lists
-    List["A"] = []
-    List["C"] = []
-    List["G"] = []
-    List["T"] = []
     nuclList = ["A", "C", "G", "T"]
+    List = {nt: [] for nt in nuclList}  # List is a dictionary of lists
     s = s.upper()
-    s = s.replace("T", "T")
+#     s = s.replace("T", "T")
     nuclCnt = {}       # empty dictionary
     dinuclCnt = {}     # empty dictionary
     for x in nuclList:
         nuclCnt[x] = 0
-        dinuclCnt[x] = {}
-        for y in nuclList:
-            dinuclCnt[x][y] = 0
+        dinuclCnt[x] = {y: 0 for y in nuclList}
 
     # Compute count and lists
     nuclCnt[s[0]] = 1
@@ -109,9 +117,7 @@ def chooseEdge(x, dinuclCnt):
 
 
 def connectedToLast(edgeList, nuclList, lastCh):
-    D = {}
-    for x in nuclList:
-        D[x] = 0
+    D = {x: 0 for x in nuclList}
     for edge in edgeList:
         a = edge[0]
         b = edge[1]
@@ -205,73 +211,85 @@ def main():
         print("Error with input foreground FASTA file(s). Please check supplied FASTA "
               "file - {}".format(e))
         exit()
+    else:
+        # parse foreground sequence FASTA file
+        print(strftime("%x %X:".format(localtime)),
+              "1. Parsing foreground sequence FASTA file")
+        fg_seqs = {header: seq for header, seq in parse_fasta(args.fg_fasta_file)}
+
     try:
         outdir = abspath(args.output_dir)
         assert exists(outdir)
     except AssertionError:
         # output directory doesn't exist, create it
         mkdir(outdir)
+    else:
+        # get output file path and name
+        outfnh = join(outdir, "{}_bkg_seqs.fasta".format(args.protein_name))
 
-    fg_seqs = {header: seq for header, seq in parse_fasta(args.fg_fasta_file)}
+    # parse unrelated genome FASTA files containing CDS sequences
+    print(strftime("%x %X:".format(localtime)),
+          "2. Calculating transition probability from FASTA files")
+    cds_transmat = dict()
+    degree = 2
+    for f in args.genome_fasta_files:
+        cds_transmat[f.split("/")[-1]] = get_transmat(f, degree)
 
-    ##############################################
-    # DINUCLEOTIDE SHUFFLED FOREGROUND SEQUENCES #
-    ##############################################
-    print(strftime("\n%x %H:%M:".format(localtime)),
-          "Generating length-matched shuffled sequences from foreground sequences")
-
-    # write to output FASTA file
-    outfnh = join(outdir,
-                  "{}_dinuc_shuffled_len_matched_bkg_seqs.fasta".
-                  format(args.protein_name))
+    print(strftime("%x %X:".format(localtime)),
+          "3. Writing background sequences to {}".format(outfnh))
     with open(outfnh, "w") as outf:
         for header, seq in fg_seqs.items():
-            outf.write(">dinuc_shuffled_len_matched_bkg_for_{}\n".format(header))
-            shuffled = dinuclShuffle(seq)
-            outf.write("{}\n".format(shuffled))
+            for entry in dna_iupac_codes(seq):
 
-    #########################################################
-    # GC% AND LENGTH MATCHED BACKGROUND SEQUENCE GENERATION #
-    #########################################################
-    print(strftime("\n%x %H:%M:".format(localtime)),
-          "Generating random length-matched background sequences from CDS/exonic regions")
-    seq_length = len(list(fg_seqs.values())[0])
-    fg_gc = {header: round(calculate_gc_percent(seq)) for header, seq in fg_seqs.items()}
+                ################################################
+                # MONONUCLEOTIDE SHUFFLED FOREGROUND SEQUENCES #
+                # Durstenfeld shuffle                          #
+                ################################################
+                outf.write(">mononuc_shuffled_bkg_for_{}\n".format(header))
+                shuff_seq = []
+                for nt in entry:
+                    j = randint(0, len(shuff_seq))
+                    if j == len(shuff_seq):
+                        shuff_seq.append(nt)
+                    else:
+                        shuff_seq.append(shuff_seq[j])
+                        shuff_seq[j] = nt
+                # pad with 2 random nucleotides
+                shuff_seq = random_dna(2, False) + "".join(shuff_seq) + \
+                    random_dna(2, False)
+                outf.write("{}\n".format("".join(shuff_seq)))
 
-    # parse genome CDS/exonic regions and collect GC% and length-matched sequences
-    cds_exons_len_matched_gc = defaultdict(list)
-    bisection_list = list()   # collecting key list for bisection code in exception below
-    for f in args.genome_fasta_files:
-        for header, seq in parse_fasta(f):
-            for kmer in get_kmers(seq, k=seq_length):
-                gc_content = round(calculate_gc_percent(kmer))
-                dict_key = "gc_{:d}_pc".format(gc_content)
-                bisection_list.append(dict_key)
-                cds_exons_len_matched_gc[dict_key].append(kmer)
-    bisection_list = sorted(bisection_list)
+                ##############################################
+                # DINUCLEOTIDE SHUFFLED FOREGROUND SEQUENCES #
+                ##############################################
+                outf.write(">dinuc_shuffled_bkg_for_{}\n".format(header))
+                # pad with 2 random nucleotides
+                shuff_seq = random_dna(2, False) + dinuclShuffle(entry) + \
+                    random_dna(2, False)
+                outf.write("{}\n".format(shuff_seq))
 
-    # write to output FASTA file
-    outfnh = join(outdir,
-                  "{}_cds_exon_len_matched_bkg_seqs.fasta".format(args.protein_name))
-    with open(outfnh, "w") as outf:
-        for header, gc_pc in fg_gc.items():
-            random_header = "gc_len_matched_bkg_for_{}".format(header)
-            dict_key = "gc_{:d}_pc".format(gc_pc)
-            try:
-                random_seq = choices(cds_exons_len_matched_gc[dict_key])[0]
-            except Exception:
-                # if dict_key GC percent sequences aren't present in CDS/exonic regions
-                # collect a sequence from the next available higher GC percent bin. E.g.
-                # if [0. 25. 50. 75. 100] are available bins, and foreground sequence has
-                # 62 percent GC content, collect a sequence from 75 percent bin.
-                index = bisect_left(bisection_list, dict_key)
-                if index == 0:
-                    random_seq = choices(cds_exons_len_matched_gc[bisection_list[0]])[0]
-                elif index == len(bisection_list):
-                    random_seq = choices(cds_exons_len_matched_gc[bisection_list[-1]])[0]
-                else:
-                    random_seq = choices(cds_exons_len_matched_gc[bisection_list[index]])[0]
-            outf.write(">{0}\n{1}\n".format(random_header, random_seq))
+                ################################################################
+                # GC CONTENT AND LENGTH MATCHED BACKGROUND SEQUENCE GENERATION #
+                ################################################################
+                outf.write(">gc_len_matched_bkg_for_{}\n".format(header))
+                gc = round(calculate_gc_percent(seq))
+                seq_len = len(seq)
+                random_key = choices(list(cds_transmat.keys()))[0]
+                while True:
+                    gc_len_seq = markov_seq(seq_len, random_dna(2, False),
+                                            cds_transmat[random_key])
+                    core_seq = gc_len_seq[2:-2]
+                    if core_seq not in fg_seqs.values():
+                        gc_diff = abs(gc - round(calculate_gc_percent(core_seq)))
+                        if gc_diff <= args.tolerance:
+                            outf.write("{}\n".format(gc_len_seq))
+                            break
+
+    ######################################################
+    # CALCULATE DNA SHAPE VALUE FOR BACKGROUND SEQUENCES #
+    ######################################################
+    for shape in ["MGW", "Roll", "HelT", "ProT", "EP"]:
+        dnashaper.getDNAShape(outfnh, shape)
 
 
 if __name__ == "__main__":
