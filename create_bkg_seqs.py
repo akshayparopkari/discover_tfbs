@@ -5,17 +5,19 @@ Create background sequences from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.2.3"
+__version__ = "0.2.5"
 
 
 import argparse
-from sys import exit
 from os import mkdir
-from random import choices, random, randint
+from os.path import abspath, exists, isfile, join
+from random import choices, randint, random
+from sys import exit
 from time import localtime, strftime
-from os.path import isfile, join, abspath, exists
-from utils import (dna_iupac_codes, parse_fasta, get_transmat, calculate_gc_percent,
-                   markov_seq, random_dna)
+
+from utils import (calculate_gc_percent, dna_iupac_codes, get_transmat, markov_seq,
+                   parse_fasta, random_dna)
+
 try:
     from rpy2.robjects.packages import importr
 except ImportError:
@@ -33,32 +35,54 @@ def handle_program_options():
         "Background sequences will be generated firstly by matching foreground motif "
         "GC-percent and length. Secondly, the foregound sequences will be shuffled to "
         "keep dinucleotide composition constant.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("fg_fasta_file", type=str,
-                        help="Path to foreground/true positive sequence dataset FASTA "
-                        "format file [REQUIRED]")
-    parser.add_argument("protein_name", type=str,
-                        help="Name of transcription factor protein. [REQUIRED]")
-    parser.add_argument("-g", "--genome_fasta_files", type=str, nargs="+",
-                        help="Specify path to one or more genome files to use as template"
-                        " from which to generae random background sequences. These genome"
-                        "file(s) must be FASTA file with very low probability of "
-                        "containing sequences with binding motifs. For example, these "
-                        "files can be FASTA file of exonic regions of non-related "
-                        "species. Please do not supply gzipped files.")
-    parser.add_argument("-t", "--tolerance", type=int, default=2,
-                        help="Percent tolerance allowed for matching GC content of "
-                        "background sequence with foreground sequence. The default value "
-                        "is 2 percent difference between background and foreground "
-                        "sequence. A value of zero will increase eexecution time for this"
-                        " script.")
-    parser.add_argument("-o", "--output_dir", type=str,
-                        help="Specify a directory to save background sequence data.")
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "fg_fasta_file",
+        type=str,
+        help="Path to foreground/true positive sequence dataset FASTA "
+        "format file [REQUIRED]",
+    )
+    parser.add_argument(
+        "protein_name",
+        type=str,
+        help="Name of transcription factor protein. [REQUIRED]",
+    )
+    parser.add_argument(
+        "-g",
+        "--genome_fasta_files",
+        type=str,
+        nargs="+",
+        help="Specify path to one or more genome files to use as template"
+        " from which to generae random background sequences. These genome"
+        "file(s) must be FASTA file with very low probability of "
+        "containing sequences with binding motifs. For example, these "
+        "files can be FASTA file of exonic regions of non-related "
+        "species. Please do not supply gzipped files.",
+    )
+    parser.add_argument(
+        "-t",
+        "--tolerance",
+        type=int,
+        default=2,
+        help="Percent tolerance allowed for matching GC content of "
+        "background sequence with foreground sequence. The default value "
+        "is 2 percent difference between background and foreground "
+        "sequence. A value of zero will increase eexecution time for this"
+        " script.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output_dir",
+        type=str,
+        help="Specify a directory to save background sequence data.",
+    )
     return parser.parse_args()
 
+
 ##########################################################################################
-    # altschulEriksonDinuclShuffle.py
-    # P. Clote, Oct 2003
+# altschulEriksonDinuclShuffle.py
+# P. Clote, Oct 2003
 
 
 def computeCountAndLists(s):
@@ -69,9 +93,8 @@ def computeCountAndLists(s):
     nuclList = ["A", "C", "G", "T"]
     List = {nt: [] for nt in nuclList}  # List is a dictionary of lists
     s = s.upper()
-#     s = s.replace("T", "T")
-    nuclCnt = {}       # empty dictionary
-    dinuclCnt = {}     # empty dictionary
+    nuclCnt = {}  # empty dictionary
+    dinuclCnt = {}  # empty dictionary
     for x in nuclList:
         nuclCnt[x] = 0
         dinuclCnt[x] = {y: 0 for y in nuclList}
@@ -88,8 +111,8 @@ def computeCountAndLists(s):
         nuclTotal += 1
         dinuclCnt[x][y] += 1
         dinuclTotal += 1
-    assert (nuclTotal == len(s))
-    assert (dinuclTotal == len(s) - 1)
+    assert nuclTotal == len(s)
+    assert dinuclTotal == len(s) - 1
     return nuclCnt, dinuclCnt, List
 
 
@@ -98,8 +121,9 @@ def chooseEdge(x, dinuclCnt):
     for y in ["A", "C", "G", "T"]:
         numInList += dinuclCnt[x][y]
     z = random()
-    denom = dinuclCnt[x]["A"] + dinuclCnt[x]["C"] + dinuclCnt[x]["G"] +\
-        dinuclCnt[x]["T"]
+    denom = (
+        dinuclCnt[x]["A"] + dinuclCnt[x]["C"] + dinuclCnt[x]["G"] + dinuclCnt[x]["T"]
+    )
     numerator = dinuclCnt[x]["A"]
     if z < float(numerator) / float(denom):
         dinuclCnt[x]["A"] -= 1
@@ -198,6 +222,8 @@ def dinuclShuffle(s):
     L.append(s[-1])
     t = "".join(L)
     return t
+
+
 ##########################################################################################
 
 
@@ -208,13 +234,17 @@ def main():
     try:
         assert isfile(args.fg_fasta_file)
     except AssertionError as e:
-        print("Error with input foreground FASTA file(s). Please check supplied FASTA "
-              "file - {}".format(e))
+        print(
+            "Error with input foreground FASTA file(s). Please check supplied FASTA "
+            "file - {0}".format(e)
+        )
         exit()
     else:
         # parse foreground sequence FASTA file
-        print(strftime("%x %X:".format(localtime)),
-              "1. Parsing foreground sequence FASTA file")
+        print(
+            strftime("%x %X:".format(localtime)),
+            "1. Parsing foreground sequence FASTA file",
+        )
         fg_seqs = {header: seq for header, seq in parse_fasta(args.fg_fasta_file)}
 
     try:
@@ -228,15 +258,19 @@ def main():
         outfnh = join(outdir, "{}_bkg_seqs.fasta".format(args.protein_name))
 
     # parse unrelated genome FASTA files containing CDS sequences
-    print(strftime("%x %X:".format(localtime)),
-          "2. Calculating transition probability from FASTA files")
+    print(
+        strftime("%x %X:".format(localtime)),
+        "2. Calculating transition probability from FASTA files",
+    )
     cds_transmat = dict()
     degree = 2
     for f in args.genome_fasta_files:
         cds_transmat[f.split("/")[-1]] = get_transmat(f, degree)
 
-    print(strftime("%x %X:".format(localtime)),
-          "3. Writing background sequences to {}".format(outfnh))
+    print(
+        strftime("%x %X:".format(localtime)),
+        "3. Writing background sequences to {0}".format(outfnh),
+    )
     with open(outfnh, "w") as outf:
         for header, seq in fg_seqs.items():
             for entry in dna_iupac_codes(seq):
@@ -255,8 +289,9 @@ def main():
                         shuff_seq.append(shuff_seq[j])
                         shuff_seq[j] = nt
                 # pad with 2 random nucleotides
-                shuff_seq = random_dna(2, False) + "".join(shuff_seq) + \
-                    random_dna(2, False)
+                shuff_seq = (
+                    random_dna(2, False) + "".join(shuff_seq) + random_dna(2, False)
+                )
                 outf.write("{}\n".format("".join(shuff_seq)))
 
                 ##############################################
@@ -264,8 +299,9 @@ def main():
                 ##############################################
                 outf.write(">dinuc_shuffled_bkg_for_{}\n".format(header))
                 # pad with 2 random nucleotides
-                shuff_seq = random_dna(2, False) + dinuclShuffle(entry) + \
-                    random_dna(2, False)
+                shuff_seq = (
+                    random_dna(2, False) + dinuclShuffle(entry) + random_dna(2, False)
+                )
                 outf.write("{}\n".format(shuff_seq))
 
                 ################################################################
@@ -276,8 +312,9 @@ def main():
                 seq_len = len(seq)
                 random_key = choices(list(cds_transmat.keys()))[0]
                 while True:
-                    gc_len_seq = markov_seq(seq_len, random_dna(2, False),
-                                            cds_transmat[random_key])
+                    gc_len_seq = markov_seq(
+                        seq_len, random_dna(2, False), cds_transmat[random_key]
+                    )
                     core_seq = gc_len_seq[2:-2]
                     if core_seq not in fg_seqs.values():
                         gc_diff = abs(gc - round(calculate_gc_percent(core_seq)))
