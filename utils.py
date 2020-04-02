@@ -261,7 +261,7 @@ def parse_blastn_results(f: str) -> dict:
 
     :param f: Blastn output file
     """
-    print(strftime("%x %X: PARSING BLASTn RESULTS"))
+    print(strftime("%x %X | PARSING BLASTn RESULTS"))
     blastn_results = dict()
     tf_name = basename(f).split("_")[0]
     print("PROCESSING {}".format(tf_name.upper()))
@@ -478,7 +478,7 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
                    -2.44,-3.63,-1.59,4.15,-2.36,4.19,-1.99, ...
     """
     # read all shape files into a dict
-    print(strftime("%x %X: Parsing DNA shape files"))
+    print(strftime("%x %X | Parsing DNA shape files"))
     shape_data = defaultdict(lambda: defaultdict())
     for file in shapefiles:
         whichshape = file.split(".")[-1]
@@ -487,7 +487,7 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
                                       for header, seq in sfp(infasta)}
 
     # parse BED file and get DNA shape of features listed in BED file
-    print(strftime("%x %X: Retrieving DNA shape data"))
+    print(strftime("%x %X | Retrieving DNA shape data"))
     with open(bedfile, "r") as inbed:
         genome_shape = dict()
         for line in inbed:
@@ -834,7 +834,7 @@ def pac(seqA: str, seqB: str):
 
 
 @profile
-def permutation_result(estimator, X, y, cv, n_permute, random_state, file: str):
+def permutation_result(estimator, X, y, cv, file: str, n_permute=5000, random_state=0):
     """
     Run permutation tests for classifier and assess significance of accuracy score. This
     is a wrapper around sklearn.model_selection.permutation_test_score
@@ -859,28 +859,44 @@ def permutation_result(estimator, X, y, cv, n_permute, random_state, file: str):
     :type file: str
     :param file: Path and file name to save the bar plot
     """
-    print(strftime("%x %X: Starting permutation testing"))
+    print(strftime("%x %X | Starting permutation testing"))
     score, permutation_score, p_value = permutation_test_score(
-        estimator, X, y, scoring="average_precision", cv=cv, n_permutations=n_permute,
-        n_jobs=-1, random_state=random_state
+        estimator,
+        X,
+        y,
+        scoring="balanced_accuracy",
+        cv=cv,
+        n_permutations=n_permute,
+        n_jobs=-1,
+        random_state=random_state,
+    )
+    print(
+        strftime(
+            "%x %X | Linear SVM classification score {0:0.3f} (pvalue : {1:0.5f})".format(
+                score, p_value
+            )
         )
-    print(strftime("%x %X:"),
-          "Linear SVM classification score {0:0.03f} (pvalue : {1:0.05f})".
-          format(score, p_value))
+    )
     with mpl.style.context("ggplot"):
         plt.figure(figsize=(10, 8))
-        plt.hist(permutation_score, bins=25, alpha=0.5, hatch="//", edgecolor="k",
-                 label="Precision scores for shuffled labels")
+        plt.hist(
+            permutation_score,
+            bins=25,
+            alpha=0.5,
+            hatch="//",
+            edgecolor="w",
+            label="Permutation scores for shuffled labels",
+        )
         ylim = plt.ylim()[1]
-        plt.vlines(2 * [1. / np.unique(y).size], 0, ylim, linestyle="dashdot",
-                   linewidth=2, label='50/50 chance')
+        plt.vlines(
+            2 * [1.0 / np.unique(y).size], 0, ylim, linewidth=3, label="50/50 chance"
+        )
         plt.vlines(2 * [score], 0, ylim, linewidth=3, colors="g")
-        score_text = "Model Score\n{:0.03f}*".format(score)
-        plt.text(score - 0.05, ylim + 0.075, score_text, ma="center")
+        plt.title("Model Accuracy Score = {:0.2f}*".format(100 * score), color="g")
         plt.xlim(0.0, 1.0)
         plt.legend(loc=2)
-        plt.xlabel("Average precision scores")
-        plt.ylabel("Frequency")
+        plt.xlabel("Accuracy score as proportion")
+        plt.ylabel("Frequency of calculated accuracy score")
         plt.tight_layout()
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
@@ -904,17 +920,17 @@ def build_feature_table(infasta: str, truefasta: str, fg_bed_file: str,
                                    files associated with '--predict' parameters
     """
     # read in FASTA data
-    print(strftime("%x %X: Reading input FASTA file"))
+    print(strftime("%x %X | Reading input FASTA file"))
     fg_data = {header: seq for header, seq in parse_fasta(infasta)}
 
     # calculate GC percent for all foreground seqs
-    print(strftime("%x %X: Calculating GC percent"))
+    print(strftime("%x %X | Calculating GC percent"))
     fg_gc = dict(zip(list(fg_data.keys()),
                  map(calculate_gc_percent, list(fg_data.values()))))
     fg_gc_df = pd.DataFrame.from_dict(fg_gc, orient="index", columns=["GC_percent"])
 
     # calculate poisson based metric
-    print(strftime("%x %X: Calculating Poisson based metrics"))
+    print(strftime("%x %X | Calculating Poisson based metrics"))
     true_seqs = {header: seq for header, seq in parse_fasta(truefasta)}
     seq_pairs = (list(product([seq], list(true_seqs.values())))
                  for seq in fg_data.values())
@@ -925,7 +941,7 @@ def build_feature_table(infasta: str, truefasta: str, fg_bed_file: str,
     fg_pac_df = pd.DataFrame.from_dict(fg_pac, orient="index", columns=["PAS", "PPS"])
 
     # calculate/retrieve shape values
-    print(strftime("%x %X: Processing DNA shape data"))
+    print(strftime("%x %X | Processing DNA shape data"))
     fg_shapes = get_shape_data(fg_bed_file, genome_wide_shape_fasta_file)
     fg_shapes_df = pd.DataFrame.from_dict(fg_shapes, orient="index")
 
