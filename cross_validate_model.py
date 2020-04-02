@@ -159,7 +159,7 @@ def main():
     ######################################
     # Set up inputs for cross validation #
     ######################################
-    X = training_data.iloc[:, 1 : training_data.shape[1]].to_numpy()
+    X = training_data.iloc[:, 1: training_data.shape[1]].to_numpy()
     y = training_data.iloc[:, 0].to_numpy()
 
     # Encode y labels and power transform X to make it more Gaussian
