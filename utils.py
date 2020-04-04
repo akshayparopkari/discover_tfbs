@@ -5,7 +5,7 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 
 
 # imports
@@ -20,6 +20,10 @@ from itertools import product, starmap
 from collections import defaultdict, Counter as cnt
 from os.path import join, abspath, realpath, isfile, basename
 err = set()
+try:
+    from pybedtools import BedTool
+except ImportError:
+    err.add("pybedtools")
 try:
     from sklearn.model_selection import permutation_test_score
 except ImportError:
@@ -721,6 +725,27 @@ def markov_seq(seq_len: int, bkg_seq: str, transmat) -> str:
         current = bkg_seq[-2:]
         bkg_seq += markov_next_state(current, transmat)
     return bkg_seq + random_dna(2, False)
+
+
+@profile
+def compute_overlap(bedA: str, bedB: str):
+    """
+    With two input BED6 format files and return the number of overlapping features
+    between them.
+
+    :param bedA: True TF binding sites  in BED6 file format
+
+    :param bedB: Genomic regions classified as TF binding site by model results in BED6
+                 file format
+    """
+    a = BedTool(bedA)
+    b = BedTool(bedB)
+    overlap_count = len(a.intersect(b, u=True))
+    overlap_pct = 100 * (overlap_count / len(a))
+    print("{0} out of {1} ({2:0.2f}%) overlaps found".format(overlap_count,
+                                                             len(a),
+                                                             overlap_pct))
+    return None
 
 
 @profile
