@@ -343,11 +343,11 @@ def main():
         original_row_count = prediction_data_df.shape[0]
         prediction_data_df = prediction_data_df.dropna()
         #         new_rows = prediction_data_df.shape[0]
-        lost_entries_pct = 100 * (dropped_entries / original_row_count)
+        lost_entries_pct = 100 * (len(dropped_entries) / original_row_count)
         print(
             strftime(
                 "%x %X | Losing {0} ({1:0.2f}%) entries due to prescence of NaNs".format(
-                    dropped_entries, lost_entries_pct
+                    len(dropped_entries), lost_entries_pct
                 )
             )
         )
