@@ -49,24 +49,17 @@ def handle_program_options():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "fg_fasta_file",
-        metavar="/path/to/true_binding_site_sequences.fasta",
-        type=str,
-        help="Path to true positive sequence dataset FASTA format file [REQUIRED]",
-    )
-    parser.add_argument(
-        "bkg_fasta_file",
-        metavar="/path/to/background_binding_site_sequences.fasta",
-        type=str,
-        help="Path to background sequence dataset FASTA format file. "
-        "This file is created using create_bkg_seqs.py script [REQUIRED]",
-    )
-    parser.add_argument(
         "protein_name",
         choices=["bcr1", "brg1", "efg1", "ndt80", "rob1", "tec1"],
         type=str,
         help="Name of transcription factor. Please see the list of valid "
         "choices for this parameter [REQUIRED]",
+    )
+    parser.add_argument(
+        "fg_fasta_file",
+        metavar="/path/to/true_binding_site_sequences.fasta",
+        type=str,
+        help="Path to true positive sequence dataset FASTA format file [REQUIRED]",
     )
     parser.add_argument(
         "fg_bed_file",
@@ -78,19 +71,22 @@ def handle_program_options():
         " columns [REQUIRED]",
     )
     parser.add_argument(
-        " bkg_shape_fasta_file",
-        metavar="/path/to/background_binding_site_sequences.fasta.*",
-        nargs="+",
+        "bkg_fasta_file",
+        metavar="/path/to/background_binding_site_sequences.fasta",
         type=str,
-        help="Path to 3D "
-        "DNA shape (DNAShapeR output files) data FASTA format file "
+        help="Path to background sequence dataset FASTA format file. "
+        "This file is created using create_bkg_seqs.py script [REQUIRED]",
+    )
+    parser.add_argument(
+        "bkg_shape_fasta_file",
+        metavar="/path/to/background_sequences_shape.fasta.*",
+        nargs=5,
+        help="Path to 3D DNA shape (DNAShapeR output files) data FASTA format file "
         "associated with '--bkg_fasta_file' parameters [REQUIRED]",
     )
     parser.add_argument(
         "genome_wide_shape_fasta_file",
-        metavar="/path/to/organism_genome_shape.fasta.*",
-        nargs="+",
-        type=str,
+        nargs=5,
         help="Path to genome-wide 3D DNA shape (DNAShapeR output files) "
         "data single-line FASTA format files associated with '--predict' "
         "parameters [REQUIRED]",
@@ -150,9 +146,10 @@ def main():
     try:
         assert isfile(args.fg_fasta_file)
         assert isfile(args.bkg_fasta_file)
-        assert len(set(args.genome_wide_shape_fasta_file)) == 5
-    except AssertionError as e:
-        print("Error: Please check supplied FASTA file - {0}".format(e))
+        assert len(args.genome_wide_shape_fasta_file) == 5
+        assert len(args.bkg_shape_fasta_file) == 5
+    except AssertionError as err:
+        print("Error: Please check supplied FASTA file\n{0}".format(err))
         exit()
 
     ###################################
