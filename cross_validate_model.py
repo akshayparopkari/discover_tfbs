@@ -14,11 +14,11 @@ from sys import exit
 from time import strftime
 
 from joblib import dump
+
 from utils import permutation_result
 
 err = []
 try:
-    import matplotlib as mpl
     import matplotlib.pyplot as plt
 
     plt.switch_backend("agg")
@@ -35,7 +35,6 @@ except ImportError:
 try:
     from sklearn.svm import SVC
     from sklearn.model_selection import (
-        permutation_test_score,
         RandomizedSearchCV,
         StratifiedShuffleSplit,
     )
@@ -149,8 +148,12 @@ def main():
         try:
             print(strftime("%x %X | Reading input feather data file"))
             training_data = pd.read_feather(args.read_training_data)
-        except Exception:
-            print("Error: Please check input file {0}e".format(args.read_training_data))
+        except Exception as e:
+            print(
+                "Error: Please check input file {0}\\n{1}".format(
+                    args.read_training_data, e
+                )
+            )
             exit()
         else:
             # feather file reading successful
