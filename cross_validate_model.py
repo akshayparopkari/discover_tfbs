@@ -118,7 +118,7 @@ def handle_program_options():
 
 def main():
 
-    print("#" * 90, strftime("%x %X | START CROSS VALIDATION"), sep="\n")
+    print("\n", "#" * 90, strftime("%x %X | START CROSS VALIDATION"), sep="\n")
     args = handle_program_options()
 
     # Check input validity
@@ -275,7 +275,7 @@ def main():
         pad_inches=0.1,
     )
 
-    print(strftime("%x %X | END CROSS VALIDATION"))
+    print(strftime("\n%x %X | END CROSS VALIDATION"))
 
 
 if __name__ == "__main__":

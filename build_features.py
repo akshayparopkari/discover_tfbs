@@ -142,7 +142,7 @@ def all_possible_seq_pairs(list1, fg_seqs):
 
 def main():
 
-    print("#" * 90, strftime("%x %X | BUILD FEATURE TABLE"), sep="\n")
+    print("\n", "#" * 90, strftime("%x %X | BUILD FEATURE TABLE"), sep="\n")
     args = handle_program_options()
 
     try:
@@ -272,7 +272,7 @@ def main():
         )
         training_data.to_feather(args.save_training_data)
 
-    print(strftime("%x %X | END BUILD FEATURE TABLE"))
+    print(strftime("\n%x %X | END BUILD FEATURE TABLE"))
 
 
 if __name__ == "__main__":

@@ -212,7 +212,7 @@ def plot_coefficients(coef, feature_names, file: str):
 
 def main():
 
-    print("#" * 90, strftime("%x %X | START CLASSIFICATION"), sep="\n")
+    print("\n", "#" * 90, strftime("%x %X | START CLASSIFICATION"), sep="\n")
     args = handle_program_options()
 
     # Check input validity
@@ -411,7 +411,7 @@ def main():
         ]
         plot_coefficients(clf.coef_, feature_names, args.plot_feature_contribution)
 
-        print(strftime("%x %X | END CLASSIFICATION"), "#" * 90, sep="\n")
+        print(strftime("\n%x %X | END CLASSIFICATION"), "#" * 90, sep="\n")
 
 
 if __name__ == "__main__":
