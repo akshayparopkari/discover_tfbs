@@ -141,6 +141,8 @@ def all_possible_seq_pairs(list1, fg_seqs):
 
 
 def main():
+
+    print("#" * 90, strftime("%x %X | BUILD FEATURE TABLE"), sep="\n")
     args = handle_program_options()
 
     try:
@@ -236,7 +238,7 @@ def main():
                     position = "{0}_pos_{1}".format(whichshape, i + 1)
                     bkg_shapes[name][position] = float(shape[i])
 
-    print(strftime("%x %X | Creating background training dataset\n"))
+    print(strftime("%x %X | Creating background training dataset"))
     gc_data_df = pd.DataFrame.from_dict(
         bkg_gc[args.protein_name], orient="index", columns=["GC_percent"]
     )
@@ -269,6 +271,8 @@ def main():
             )
         )
         training_data.to_feather(args.save_training_data)
+
+    print(strftime("%x %X | END BUILD FEATURE TABLE"))
 
 
 if __name__ == "__main__":
