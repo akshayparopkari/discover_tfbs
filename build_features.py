@@ -142,7 +142,7 @@ def all_possible_seq_pairs(list1, fg_seqs):
 
 def main():
 
-    print("\n", "#" * 90, strftime("%x %X | BUILD FEATURE TABLE"), sep="\n")
+    print("#" * 90, strftime("%x %X | BUILD FEATURE TABLE\n"), sep="\n\n")
     args = handle_program_options()
 
     try:
@@ -157,7 +157,7 @@ def main():
     ###################################
     # Processing foreground sequences #
     ###################################
-    print("\n", strftime("%x %X | Processing foreground FASTA file"))
+    print(strftime("%x %X | Processing foreground FASTA file"))
     print("=" * 90, sep="\n")
     positive_data_df = build_feature_table(
         args.fg_fasta_file,
@@ -170,7 +170,7 @@ def main():
     ###################################
     # Processing background sequences #
     ###################################
-    print(strftime("%x %X | Processing background FASTA file"))
+    print(strftime("\n%x %X | Processing background FASTA file"))
     print("=" * 90, sep="\n")
 
     # get all background sequences
@@ -272,7 +272,7 @@ def main():
         )
         training_data.to_feather(args.save_training_data)
 
-    print(strftime("\n%x %X | END BUILD FEATURE TABLE"))
+    print(strftime("\n%x %X | END BUILD FEATURE TABLE\n"))
 
 
 if __name__ == "__main__":

@@ -204,7 +204,7 @@ def plot_coefficients(coef, feature_names, file: str):
             range(len(coef)),
             coef[top_coefficients][::-1],
             color=colors,
-            hatch="/",
+            hatch="//",
             tick_label=feature_names[top_coefficients][::-1],
         )
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
@@ -212,7 +212,7 @@ def plot_coefficients(coef, feature_names, file: str):
 
 def main():
 
-    print("\n", "#" * 90, strftime("%x %X | START CLASSIFICATION"), sep="\n")
+    print("#" * 90, strftime("%x %X | START CLASSIFICATION\n"), sep="\n\n")
     args = handle_program_options()
 
     # Check input validity
@@ -411,7 +411,7 @@ def main():
         ]
         plot_coefficients(clf.coef_, feature_names, args.plot_feature_contribution)
 
-        print(strftime("\n%x %X | END CLASSIFICATION"), "#" * 90, sep="\n")
+        print(strftime("\n%x %X | END CLASSIFICATION\n"), "#" * 90, sep="\n")
 
 
 if __name__ == "__main__":

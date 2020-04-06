@@ -118,7 +118,7 @@ def handle_program_options():
 
 def main():
 
-    print("\n", "#" * 90, strftime("%x %X | START CROSS VALIDATION"), sep="\n")
+    print("#" * 90, strftime("%x %X | START CROSS VALIDATION\n"), sep="\n\n")
     args = handle_program_options()
 
     # Check input validity
@@ -216,11 +216,11 @@ def main():
                 protein_name
             )
         ),
-        "{0}Mean accuracy score: {1:0.2f} +/- {2:0.2f}%".format(
-            " " * 20, mean_ba, std_ba
+        "{0:>20}Mean accuracy score: {1:0.2f} +/- {2:0.2f}%".format(
+            "", mean_ba, std_ba
         ),
-        "{0}Mean Matthews correlation coefficient: {1:0.2f} +/- {2:0.2f}%".format(
-            " " * 20, mean_mcc, std_mcc
+        "{0:>20}Mean Matthews correlation coefficient: {1:0.2f} +/- {2:0.2f}%".format(
+            "", mean_mcc, std_mcc
         ),
         sep="\n",
     )
@@ -275,7 +275,7 @@ def main():
         pad_inches=0.1,
     )
 
-    print(strftime("\n%x %X | END CROSS VALIDATION"))
+    print(strftime("\n%x %X | END CROSS VALIDATION\n"))
 
 
 if __name__ == "__main__":
