@@ -6,7 +6,7 @@ binding site.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.3"
+__version__ = "0.1.7"
 
 
 import argparse
@@ -21,10 +21,10 @@ from joblib import load
 from utils import calculate_gc_percent, get_shape_data, pac, parse_fasta
 
 err = []
-try:
-    from sklearn.preprocessing import PowerTransformer
-except ImportError:
-    err.append("scikit-learn")
+# try:
+#     from sklearn.preprocessing import PowerTransformer
+# except ImportError:
+#     err.append("scikit-learn")
 try:
     import matplotlib as mpl
     import matplotlib.pyplot as plt
@@ -212,6 +212,7 @@ def plot_coefficients(coef, feature_names, file: str):
 
 def main():
 
+    print("#" * 90, strftime("%x %X | START CLASSIFICATION"), sep="\n")
     args = handle_program_options()
 
     # Check input validity
@@ -352,16 +353,14 @@ def main():
             )
         )
         prediction_data_features = prediction_data_df.to_numpy()
-        prediction_data_features = PowerTransformer().fit_transform(
-            prediction_data_features
-        )
+        model = load(args.model_file)
+        prediction_data_features = model["scaler"].transform(prediction_data_features)
 
         ############################################
         # Classify sequences as True vs False TFBS #
         ############################################
         print(strftime("%x %X | Classifying sequences"))
-        model = load(args.model_file)
-        clf = model.best_estimator_
+        clf = model["search"].best_estimator_
         try:
             pred_results = clf.predict(prediction_data_features)
         except Exception as e:
@@ -411,6 +410,8 @@ def main():
             for entry in prediction_data_df.columns.to_numpy()
         ]
         plot_coefficients(clf.coef_, feature_names, args.plot_feature_contribution)
+
+        print(strftime("%x %X | END CLASSIFICATION"), "#" * 90, sep="\n")
 
 
 if __name__ == "__main__":
