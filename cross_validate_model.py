@@ -5,7 +5,7 @@ Create confusion matrices from training data.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 
 
 import argparse
@@ -118,6 +118,7 @@ def handle_program_options():
 
 def main():
 
+    print("#" * 90, strftime("%x %X | START CROSS VALIDATION"), sep="\n")
     args = handle_program_options()
 
     # Check input validity
@@ -168,7 +169,10 @@ def main():
     # Encode y labels and power transform X to make it more Gaussian
     le = LabelEncoder()
     y_encoded = le.fit_transform(y)
-    X_transformed = PowerTransformer().fit_transform(X, y_encoded)
+    scaler = PowerTransformer()
+    scaler_fit = scaler.fit(X)
+    dump_file = {"scaler": scaler_fit}
+    X_transformed = scaler.transform(X)
 
     ###################################################################
     # Split data into training and testing set for RandomizedSearchCV #
@@ -191,7 +195,14 @@ def main():
         "MCC": make_scorer(matthews_corrcoef),
     }
     random_search = RandomizedSearchCV(
-        clf, params, n_iter=100, scoring=scorers, n_jobs=-1, cv=cv, refit="MCC"
+        clf,
+        params,
+        n_iter=100,
+        scoring=scorers,
+        n_jobs=-1,
+        cv=cv,
+        refit="Balanced_Accuracy",
+        random_state=0,
     )
     search = random_search.fit(X_train, y_train)
     y_pred = search.predict(X_test)
@@ -205,9 +216,11 @@ def main():
                 protein_name
             )
         ),
-        "\t\tMean accuracy score: {:0.2f} +/- {:0.2f}%".format(mean_ba, std_ba),
-        "\t\tMean Matthews correlation coefficient: {:0.2f} +/- {:0.2f}%".format(
-            mean_mcc, std_mcc
+        "{0}Mean accuracy score: {1:0.2f} +/- {2:0.2f}%".format(
+            " " * 20, mean_ba, std_ba
+        ),
+        "{0}Mean Matthews correlation coefficient: {1:0.2f} +/- {2:0.2f}%".format(
+            " " * 20, mean_mcc, std_mcc
         ),
         sep="\n",
     )
@@ -221,7 +234,8 @@ def main():
         args.save_model_file += ".z"
     else:
         print(strftime("%x %X | Saving model file to {0}".format(args.save_model_file)))
-        dump(search, args.save_model_file, compress=6)
+        dump_file["search"] = search
+        dump(dump_file, args.save_model_file, compress=9, protocol=-1)
 
     ##############################################################
     # Test significance of classification using permutation test #
@@ -260,6 +274,8 @@ def main():
         bbox_inches="tight",
         pad_inches=0.1,
     )
+
+    print(strftime("%x %X | END CROSS VALIDATION"))
 
 
 if __name__ == "__main__":
