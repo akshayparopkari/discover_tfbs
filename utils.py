@@ -5,20 +5,24 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.2.5"
+__version__ = "0.2.7"
 
+
+import subprocess as sp
+from collections import Counter as cnt
+from collections import defaultdict
+from functools import lru_cache
+from itertools import product
+from multiprocessing import Pool
+from os.path import abspath, basename, isfile, join, realpath
+from random import choices
 
 # imports
 from sys import exit
-import subprocess as sp
 from time import strftime
-from random import choices
-from functools import lru_cache
 from urllib.parse import parse_qs
 from urllib.request import urlopen
-from itertools import product, starmap
-from collections import defaultdict, Counter as cnt
-from os.path import join, abspath, realpath, isfile, basename
+
 err = set()
 try:
     from pybedtools import BedTool
@@ -31,7 +35,8 @@ except ImportError:
 try:
     import matplotlib as mpl
     import matplotlib.pyplot as plt
-    plt.switch_backend('agg')
+
+    plt.switch_backend("agg")
 except ImportError:
     err.add("matplotlib")
 try:
@@ -110,16 +115,31 @@ def dna_iupac_codes(seq: str) -> list:
     :param sequence: a valid single DNA nucleotide sequence
     """
     # initialize IUPAC codes in a dict
-    iupac_codes = {"A": ["A"], "C": ["C"], "G": ["G"], "T": ["T"], "R": ["A", "G"],
-                   "Y": ["C", "T"], "S": ["G", "C"], "W": ["A", "T"], "K": ["G", "T"],
-                   "M": ["A", "C"], "B": ["C", "G", "T"], "D": ["A", "G", "T"],
-                   "H": ["A", "C", "T"], "V": ["A", "C", "G"], "N": ["A", "C", "G", "T"]}
+    iupac_codes = {
+        "A": ["A"],
+        "C": ["C"],
+        "G": ["G"],
+        "T": ["T"],
+        "R": ["A", "G"],
+        "Y": ["C", "T"],
+        "S": ["G", "C"],
+        "W": ["A", "T"],
+        "K": ["G", "T"],
+        "M": ["A", "C"],
+        "B": ["C", "G", "T"],
+        "D": ["A", "G", "T"],
+        "H": ["A", "C", "T"],
+        "V": ["A", "C", "G"],
+        "N": ["A", "C", "G", "T"],
+    }
     return list(map("".join, product(*[iupac_codes[nt.upper()] for nt in seq])))
 
 
 @profile
-def get_ca_chrom_seq(url="http://www.candidagenome.org/download/sequence/C_albicans_SC5314/Assembly22/current/C_albicans_SC5314_A22_current_chromosomes.fasta.gz",
-                     outfile="./C_albicans_SC5314_A22_current_chromosomes.fasta.gz"):
+def get_ca_chrom_seq(
+    url="http://www.candidagenome.org/download/sequence/C_albicans_SC5314/Assembly22/current/C_albicans_SC5314_A22_current_chromosomes.fasta.gz",
+    outfile="./C_albicans_SC5314_A22_current_chromosomes.fasta.gz",
+):
     """
     Download Candida albicans chromosome sequence FASTA file from Candida genome
     database (CGD)
@@ -144,8 +164,11 @@ def parse_fasta(fasta_file: str):
         assert isfile(fasta_file)
     except AssertionError:
         # file doesn't exist
-        exit("\n{} does not exist. Please provide a valid FASTA file.\n".
-             format(fasta_file))
+        exit(
+            "\n{} does not exist. Please provide a valid FASTA file.\n".format(
+                fasta_file
+            )
+        )
     else:
         # valid FASTA file
         try:
@@ -172,9 +195,12 @@ def bkg_gc(bkg_fasta: str, outdir: str):
     """
     for header, seq in parse_fasta(bkg_fasta):
         bseqs = dna_iupac_codes(seq)
-        gc = {s: 100 * (s.count("G") + s.count("C")) /
-              (s.count("G") + s.count("C") + s.count("A") + s.count("T"))
-              for s in bseqs}
+        gc = {
+            s: 100
+            * (s.count("G") + s.count("C"))
+            / (s.count("G") + s.count("C") + s.count("A") + s.count("T"))
+            for s in bseqs
+        }
         for sequence, gc in gc.items():
             outfnh = realpath(join(outdir, "bkg_gc_{}.txt".format(round(gc))))
             if isfile(outfnh):
@@ -251,8 +277,9 @@ def split_file(fnh: str, nlines=50000):
     """
     prefix = fnh.split(".")[0] + "_"
     additional_suffix = ".fasta"
-    split_func = "split -d -a 5 --additional-suffix {0} -l {1} {2} {3}".\
-        format(additional_suffix, nlines, fnh, prefix)
+    split_func = "split -d -a 5 --additional-suffix {0} -l {1} {2} {3}".format(
+        additional_suffix, nlines, fnh, prefix
+    )
     kwargs = sh.split(split_func)
     print("Running {0}".format(kwargs))
     sp.run(kwargs)
@@ -315,7 +342,7 @@ def parse_blastn_results(f: str) -> dict:
                         "send": [int(line[9])],
                         "evalue": [float(line[10])],
                         "bitscore": [float(line[11])],
-                        "strand": [strand]
+                        "strand": [strand],
                     }
     return blastn_results
 
@@ -340,11 +367,11 @@ def get_kmers(seq: str, k=6):
     except AssertionError:
         # `seq` is not a str, iterate through the list of nucleotide sequences
         # dict of seq and their kmers {sequence: [kmer1, kmer2, ...]}
-        return ({s: [s[i: i + k] for i in range(0, len(s) - (k - 1), 1)] for s in seq})
+        return {s: [s[i : i + k] for i in range(0, len(s) - (k - 1), 1)] for s in seq}
     else:
         # `seq` is a single sequence
         # list of kmers [kmer1, kmer2, ...]
-        return ([seq[i: i + k] for i in range(0, len(seq) - (k - 1), 1)])
+        return [seq[i : i + k] for i in range(0, len(seq) - (k - 1), 1)]
 
 
 @profile
@@ -364,7 +391,7 @@ def get_kmer_counts(seq: str, k=6) -> dict:
     n_kmers = len(seq) - k + 1
     try:
         for i in range(n_kmers):
-            counts[seq[i: i + k]] += 1
+            counts[seq[i : i + k]] += 1
     except Exception as e:
         print("Exception occurred: {}".format(e))
         return
@@ -400,9 +427,11 @@ def blast_to_bed(infile: str, outfile: str):
                     chrom_start = int(line_list[9]) - 1
                     chrom_end = int(line_list[8])
                     strand = "-"
-                outbed.write("{0}\t{1}\t{2}\t{3}\t.\t{4}\n".format(chrom, chrom_start,
-                                                                   chrom_end, motif_name,
-                                                                   strand))
+                outbed.write(
+                    "{0}\t{1}\t{2}\t{3}\t.\t{4}\n".format(
+                        chrom, chrom_start, chrom_end, motif_name, strand
+                    )
+                )
 
 
 @profile
@@ -418,6 +447,7 @@ def sort_bed_file(inbed: str, outbed: str):
     """
     import sys
     import subprocess as sp
+
     try:
         import shlex
     except ImportError as ie:
@@ -455,13 +485,15 @@ def bed_to_fasta(inbed: str, genome_file: str, outfasta: str):
     """
     import sys
     import subprocess as sp
+
     try:
         import shlex
     except ImportError as ie:
         sys.exit("Please install {} module before executing this script.".format(ie))
 
-    get_fasta = "bedtools getfasta -fi {0} -bed {1} -s -fo {2}".format(genome_file,
-                                                                       inbed, outfasta)
+    get_fasta = "bedtools getfasta -fi {0} -bed {1} -s -fo {2}".format(
+        genome_file, inbed, outfasta
+    )
     kwargs = shlex.split(get_fasta)
     print("Running {0}".format(get_fasta))
     sp.run(kwargs, check=True)
@@ -487,8 +519,9 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
     for file in shapefiles:
         whichshape = file.split(".")[-1]
         with open(file, "r") as infasta:
-            shape_data[whichshape] = {header: np.array(seq.split(","))
-                                      for header, seq in sfp(infasta)}
+            shape_data[whichshape] = {
+                header: np.array(seq.split(",")) for header, seq in sfp(infasta)
+            }
 
     # parse BED file and get DNA shape of features listed in BED file
     print(strftime("%x %X | Retrieving DNA shape data"))
@@ -503,24 +536,29 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
             for shape, data in shape_data.items():
                 if strand == "-":
                     # negative strand, get shape data in reverse order
-                    seq = data[chrom][int(end): int(start) - 1: -1]
+                    seq = data[chrom][int(end) : int(start) - 1 : -1]
                 else:
                     # positive strand
-                    seq = data[chrom][int(start): int(end) + 1]
+                    seq = data[chrom][int(start) : int(end) + 1]
                 for i in range(1, len(seq)):
                     position = "{0}_pos_{1}".format(shape, i)
-                    if seq[i] == "NA":
-                        # no shape data calculated, use 0.0
-                        genome_shape[name][position] = 0.0
-                    else:
+                    try:
                         # retrieve shape value
                         genome_shape[name][position] = float(seq[i])
+                    except ValueError:
+                        # no shape data calculated, use 0.0
+                        genome_shape[name][position] = 0.0
     return genome_shape
 
 
 @profile
-def parse_gff_fasta(gff_file: str, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta",
-                    genome="22", feature="CDS"):
+def parse_gff_fasta(
+    gff_file: str,
+    parsed_fasta,
+    out_fasta="Ca22_CDS_seqs.fasta",
+    genome="22",
+    feature="CDS",
+):
     """
     Parses a GFF and fasta data (output from parse_fasta()) of a genome and collect
     sequences of certain feature in GFF file. By default, this function will return all
@@ -575,24 +613,34 @@ def parse_gff_fasta(gff_file: str, parsed_fasta, out_fasta="Ca22_CDS_seqs.fasta"
                     else:
                         attributes = parse_qs(line[8])
                         try:
-                            seq_name = "|".join([attributes["ID"][0],
-                                                attributes["orf_classification"][0],
-                                                attributes["parent_feature_type"][0],
-                                                attributes["Parent"][0], line[2]])
+                            seq_name = "|".join(
+                                [
+                                    attributes["ID"][0],
+                                    attributes["orf_classification"][0],
+                                    attributes["parent_feature_type"][0],
+                                    attributes["Parent"][0],
+                                    line[2],
+                                ]
+                            )
                             seq_name = seq_name.replace(" ", "_")
                         except KeyError:
                             # sparse GFF attributes
                             try:
-                                seq_name = "|".join([attributes["Parent"][0], line[1],
-                                                     line[2]])
+                                seq_name = "|".join(
+                                    [attributes["Parent"][0], line[1], line[2]]
+                                )
                                 seq_name = seq_name.replace(" ", "_")
                             except KeyError:
                                 # even more sparse GFF attributes
-                                seq_name = "|".join([attributes["ID"][0], line[1],
-                                                     line[2]])
+                                seq_name = "|".join(
+                                    [attributes["ID"][0], line[1], line[2]]
+                                )
                                 seq_name = seq_name.replace(" ", "_")
-                        outfile.write(">{0}\n{1}\n".format(seq_name,
-                                      parsed_fasta[line[0]][start: end].seq))
+                        outfile.write(
+                            ">{0}\n{1}\n".format(
+                                seq_name, parsed_fasta[line[0]][start:end].seq
+                            )
+                        )
     return None
 
 
@@ -613,8 +661,11 @@ def get_start_prob(fasta_file, verbose=False) -> dict:
         assert isfile(fasta_file)
     except AssertionError:
         # file doesn't exist
-        exit("\n{} does not exist. Please provide a valid FASTA file.\n".
-             format(fasta_file))
+        exit(
+            "\n{} does not exist. Please provide a valid FASTA file.\n".format(
+                fasta_file
+            )
+        )
     else:
         # parse FASTA file and collect nucleotide frequencies
         bkg_freq = cnt()
@@ -624,9 +675,10 @@ def get_start_prob(fasta_file, verbose=False) -> dict:
 
     # helpful message about input sequences - optional
     if verbose:
-        gc_content = 100 * ((bkg_freq["G"] + bkg_freq["C"]) /
-                            sum([bkg_freq["C"], bkg_freq["T"], bkg_freq["A"],
-                                 bkg_freq["G"]]))
+        gc_content = 100 * (
+            (bkg_freq["G"] + bkg_freq["C"])
+            / sum([bkg_freq["C"], bkg_freq["T"], bkg_freq["A"], bkg_freq["G"]])
+        )
         print("GC content of sequences in {}: {:0.2f}%".format(fasta_file, gc_content))
 
     # calculate background probabilities
@@ -649,8 +701,11 @@ def get_transmat(fasta_file: str, n=5):
         assert isfile(fasta_file)
     except AssertionError:
         # file doesn't exist
-        exit("\n{} does not exist. Please provide a valid FASTA file.\n".
-             format(fasta_file))
+        exit(
+            "\n{} does not exist. Please provide a valid FASTA file.\n".format(
+                fasta_file
+            )
+        )
     else:
         # parse FASTA file and collect nucleotide frequencies
         with open(fasta_file) as infile:
@@ -679,9 +734,11 @@ def get_transmat(fasta_file: str, n=5):
                             kmer_counts[kmer[0][:-1]] = cnt(kmer[0][-1])
 
             # calculate probabilities for all nt after kmer
-            kmer_prob = {k1: {k2: v2 / sum(v1.values()) for k2, v2 in v1.items()}
-                         for k1, v1 in kmer_counts.items()}
-    return pd.DataFrame.from_dict(kmer_prob, orient="index").fillna(0.)
+            kmer_prob = {
+                k1: {k2: v2 / sum(v1.values()) for k2, v2 in v1.items()}
+                for k1, v1 in kmer_counts.items()
+            }
+    return pd.DataFrame.from_dict(kmer_prob, orient="index").fillna(0.0)
 
 
 @profile
@@ -742,9 +799,11 @@ def compute_overlap(bedA: str, bedB: str):
     b = BedTool(bedB)
     overlap_count = len(a.intersect(b, u=True))
     overlap_pct = 100 * (overlap_count / len(a))
-    print("{0} out of {1} ({2:0.2f}%) overlaps found".format(overlap_count,
-                                                             len(a),
-                                                             overlap_pct))
+    print(
+        "{0} out of {1} ({2:0.2f}%) overlaps found".format(
+            overlap_count, len(a), overlap_pct
+        )
+    )
     return None
 
 
@@ -771,9 +830,9 @@ def gc_len_matched_bkg_seq_gen(fg_seqs: dict, transmat: dict, tol=5) -> dict:
             seq_len = len(seq)
             random_key = choices(list(transmat.keys()))[0]
             while True:
-                bkg_seqs[header] = markov_seq(seq_len,
-                                              random_dna(2, False),
-                                              transmat[random_key])
+                bkg_seqs[header] = markov_seq(
+                    seq_len, random_dna(2, False), transmat[random_key]
+                )
                 core_seq = bkg_seqs[header][2:-2]
                 if core_seq not in fg_seqs.values():
                     gc_diff = abs(gc - round(calculate_gc_percent(core_seq)))
@@ -833,8 +892,7 @@ def pac(seqA: str, seqB: str):
         wc_seqB = sgb(word, 0)
         Cw_AB = wc_seqB if wc_seqA > wc_seqB else wc_seqA
         if Cw_AB > 0:
-            prob = (1 - _cdf(Cw_AB - 1, mw_A[word])) *\
-                   (1 - _cdf(Cw_AB - 1, mw_B[word]))
+            prob = (1 - _cdf(Cw_AB - 1, mw_A[word])) * (1 - _cdf(Cw_AB - 1, mw_B[word]))
         else:
             prob = 1
         try:
@@ -927,8 +985,9 @@ def permutation_result(estimator, X, y, cv, file: str, n_permute=5000, random_st
 
 
 @profile
-def build_feature_table(infasta: str, truefasta: str, fg_bed_file: str,
-                        genome_wide_shape_fasta_file: list):
+def build_feature_table(
+    infasta: str, truefasta: str, fg_bed_file: str, genome_wide_shape_fasta_file: list
+):
     """
     Build feature table by calculating/retrieving all relevant characteristics.
 
@@ -950,20 +1009,30 @@ def build_feature_table(infasta: str, truefasta: str, fg_bed_file: str,
 
     # calculate GC percent for all foreground seqs
     print(strftime("%x %X | Calculating GC percent"))
-    fg_gc = dict(zip(list(fg_data.keys()),
-                 map(calculate_gc_percent, list(fg_data.values()))))
+    fg_gc = dict(
+        zip(list(fg_data.keys()), map(calculate_gc_percent, list(fg_data.values())))
+    )
     fg_gc_df = pd.DataFrame.from_dict(fg_gc, orient="index", columns=["GC_percent"])
 
     # calculate poisson based metric
     print(strftime("%x %X | Calculating Poisson based metrics"))
     true_seqs = {header: seq for header, seq in parse_fasta(truefasta)}
-    seq_pairs = (list(product([seq], list(true_seqs.values())))
-                 for seq in fg_data.values())
-    fg_poisson_metrics = np.asarray([np.asarray(list(starmap(pac, pair_set))).
-                                     mean(axis=0, dtype=np.float64)
-                                     for pair_set in seq_pairs])
-    fg_pac = dict(zip(fg_data.keys(), fg_poisson_metrics))
-    fg_pac_df = pd.DataFrame.from_dict(fg_pac, orient="index", columns=["PAS", "PPS"])
+    seq_pairs = (
+        list(product([seq], list(true_seqs.values()))) for seq in fg_data.values()
+    )
+    with Pool() as pool:
+        try:
+            fg_poisson_metrics = [
+                np.asarray(pool.starmap(pac, pair_set)).mean(axis=0, dtype=np.float32)
+                for pair_set in seq_pairs
+            ]
+        except Exception as err:
+            return err
+        else:
+            fg_pac = dict(zip(fg_data.keys(), fg_poisson_metrics))
+            fg_pac_df = pd.DataFrame.from_dict(
+                fg_pac, orient="index", columns=["PAS", "PPS"]
+            )
 
     # calculate/retrieve shape values
     print(strftime("%x %X | Processing DNA shape data"))
@@ -971,8 +1040,10 @@ def build_feature_table(infasta: str, truefasta: str, fg_bed_file: str,
     fg_shapes_df = pd.DataFrame.from_dict(fg_shapes, orient="index")
 
     # create pandas dataframe and return it
-    training_data_df = fg_gc_df.merge(fg_pac_df, how="outer", left_index=True,
-                                      right_index=True)
-    training_data_df = training_data_df.merge(fg_shapes_df, how="outer", left_index=True,
-                                              right_index=True)
+    training_data_df = fg_gc_df.merge(
+        fg_pac_df, how="outer", left_index=True, right_index=True
+    )
+    training_data_df = training_data_df.merge(
+        fg_shapes_df, how="outer", left_index=True, right_index=True
+    )
     return training_data_df
