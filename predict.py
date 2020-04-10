@@ -21,10 +21,6 @@ from joblib import load
 from utils import calculate_gc_percent, get_shape_data, pac, parse_fasta
 
 err = []
-# try:
-#     from sklearn.preprocessing import PowerTransformer
-# except ImportError:
-#     err.append("scikit-learn")
 try:
     import matplotlib as mpl
     import matplotlib.pyplot as plt
