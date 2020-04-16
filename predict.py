@@ -407,7 +407,7 @@ def main():
         ]
         plot_coefficients(clf.coef_, feature_names, args.plot_feature_contribution)
 
-        print(strftime("\n%x %X | END CLASSIFICATION\n"), "#" * 90, sep="\n")
+        print(strftime("\n%x %X | END CLASSIFICATION\n"), sep="\n")
 
 
 if __name__ == "__main__":
