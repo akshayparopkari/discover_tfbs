@@ -131,9 +131,7 @@ def main():
         genome_file = BedTool(args.genome_feature_file)
         try:
             closest_gene = predicted_intergenic_hits.closest(
-                genome_file,
-                D="b",
-                output=args.output_file,
+                genome_file, D="b", output=args.output_file,
             )
         except Exception as err:
             exit(print(err))

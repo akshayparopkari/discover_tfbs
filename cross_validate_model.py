@@ -14,7 +14,6 @@ from sys import exit
 from time import strftime
 
 from joblib import dump
-
 from utils import permutation_result
 
 err = []

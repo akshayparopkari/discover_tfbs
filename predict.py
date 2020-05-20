@@ -17,7 +17,6 @@ from sys import exit
 from time import strftime
 
 from joblib import load
-
 from utils import calculate_gc_percent, get_shape_data, pac, parse_fasta
 
 err = []

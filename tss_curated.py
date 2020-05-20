@@ -5,12 +5,14 @@ docs
 
 __version__ = '0.0.1'
 
-import sys
 import argparse
+import sys
+from multiprocessing import Pool, cpu_count, current_process
 from os import walk
-from os.path import join, dirname, basename
-from multiprocessing import Pool, current_process, cpu_count
+from os.path import basename, dirname, join
+
 from utils import get_blastn_results
+
 try:
     from numpy import mean
 except ImportError:
