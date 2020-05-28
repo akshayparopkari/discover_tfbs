@@ -17,8 +17,6 @@ from os.path import isfile
 from sys import exit
 from time import strftime
 
-from utils import parse_fasta
-
 err = []
 try:
     from scipy.stats import describe, ks_2samp
@@ -62,13 +60,6 @@ def handle_program_options():
         choices=["bcr1", "brg1", "efg1", "ndt80", "rob1", "tec1"],
         help="Specify the name of transcription factor. Please see the "
         "list of valid choices for this parameter [REQUIRED]",
-    )
-    parser.add_argument(
-        "fg_fasta_file",
-        metavar="/path/to/true_binding_sequences.fasta",
-        type=str,
-        help="Path to foreground/true positive sequence dataset FASTA "
-        "format file [REQUIRED]",
     )
     parser.add_argument(
         "tf_genome_wide_blastn_matches",
@@ -143,7 +134,6 @@ def main():
     args = handle_program_options()
 
     try:
-        assert isfile(args.fg_fasta_file)
         assert isfile(args.prediction_results)
         assert isfile(args.tf_genome_wide_blastn_matches)
         assert isfile(args.genome_intergenic_feature_file)
@@ -152,7 +142,6 @@ def main():
         exit()
     else:
         protein_name = args.protein_name.capitalize()
-        tf_length = max([len(seq) for header, seq in parse_fasta(args.fg_fasta_file)])
         for fnh in [
             args.null_tfbs_dist_output_file,
             args.predicted_tfbs_dist_output_file,
@@ -297,7 +286,7 @@ def main():
         plt.hist(
             predicted_density,
             histtype="barstacked",
-            hatch="*",
+            hatch="..",
             log=True,
             color="#B1A464",
             label="Model predicted TFBS distribution",
