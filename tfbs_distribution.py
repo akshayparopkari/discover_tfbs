@@ -8,7 +8,7 @@ are higher, as expected or lower than the mean null expected count.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.0.9"
+__version__ = "0.1.1"
 
 
 import argparse
@@ -20,6 +20,7 @@ from time import strftime
 err = []
 try:
     from scipy.stats import describe, ks_2samp
+    from scipy.spatial.distance import jensenshannon
 except ImportError:
     err.append("scipy")
 try:
@@ -37,6 +38,11 @@ try:
     from pybedtools import BedTool
 except ImportError:
     err.append("pybedtools")
+try:
+    from statsmodels.stats.proportion import proportions_ztest
+    from statsmodels.stats.multitest import multipletests
+except ImportError:
+    err.append("statsmodels")
 try:
     assert len(err) == 0
 except AssertionError:
@@ -93,10 +99,17 @@ def handle_program_options():
     )
     parser.add_argument(
         "predicted_tfbs_dist_output_file",
-        metavar="/path/to/tf_predicted_tfbs_dist.pdf",
+        metavar="/path/to/predicted_tfbs_dist.pdf",
         type=str,
         help="Specify location and name of file to save model predicted TF binding site "
         "distribution [REQUIRED]",
+    )
+    parser.add_argument(
+        "predicted_tfbs_significance",
+        metavar="/path/to/predicted_tfbs_significance.txt",
+        type=str,
+        help="Specify location and name of file to save model predicted TF binding site "
+        "density significance [REQUIRED]",
     )
     return parser.parse_args()
 
@@ -192,10 +205,11 @@ def main():
     len_nobs, len_minmax, len_mean1, len_var, len_skew, len_kurt = describe(
         list(intergenic_len.values())
     )
+    expected_null_tfbs_density = cnt_mean1 / len_mean1
     print(
         "{0:>20}Expected number of TFBS in an average intergenic region (Empirical) = "
         "{1:0.3f} +/- {2:0.3f}".format(
-            "", cnt_mean1 / len_mean1, np.sqrt(cnt_var) / np.sqrt(len_var)
+            "", expected_null_tfbs_density, np.sqrt(cnt_var) / np.sqrt(len_var)
         )
     )
     empirical_tfbs_density = [
@@ -298,13 +312,17 @@ def main():
             lw=3,
             label="Mean model predicted TFBS distribution",
         )
-        plt.ylabel("Frequency", color="k")
-        plt.xlabel("{} binding site density".format(protein_name), color="k")
+        plt.ylabel("Frequency", color="k", fontsize=10)
+        #         plt.xlabel("{} binding site density".format(protein_name), color="k")
         plt.legend(fontsize=12)
+        plt.suptitle(
+            "{} binding site density".format(protein_name), y=1.01, fontsize=12
+        )
         plt.title(
             "Kolmogorov-Smirnov test ({0:0.3f}, pvalue={1:0.3f})".format(
                 ks_stat, ks_pval
-            )
+            ),
+            fontsize=11,
         )
         plt.savefig(
             args.null_tfbs_dist_output_file,
@@ -314,6 +332,43 @@ def main():
             bbox_inches="tight",
             pad_inches=0.1,
         )
+
+    ######################################################################################
+    # Per intergenic region, get collect regions with unusually high or low TFBS density #
+    ######################################################################################
+    print(
+        strftime(
+            "%x %X | Collecting high density intergenic regions for {}".format(
+                protein_name
+            )
+        )
+    )
+
+    mean_jensen_shannon = jensenshannon(
+        np.full_like(predicted_density, expected_null_tfbs_density), predicted_density
+    )
+    nobs = len(predicted_density)
+
+    ztest_results = {
+        key: proportions_ztest(
+            cnt / intergenic_len[key], nobs, mean_jensen_shannon, "larger"
+        )
+        for key, cnt in num_of_hits.items()
+    }
+    pvals = [ztest[1] for ztest in ztest_results.values()]
+    p_adj = dict(zip(ztest_results.keys(), multipletests(pvals, method="fdr_bh")[1]))
+    with open(args.predicted_tfbs_significance, "w") as outfile:
+        outfile.write("intergenic_region\tz_stat\tpvalue(greater)\tp_adj\n")
+        try:
+            for intergenic_region, res in ztest_results.items():
+                outfile.write(
+                    "{0}\t{1:0.3f}\t{2:0.3f}\t{3:0.3f}\n".format(
+                        intergenic_region, res[0], res[1], p_adj[intergenic_region]
+                    )
+                )
+        except Exception as ee:
+            print(ee, intergenic_region, res, p_adj[intergenic_region])
+            exit()
 
 
 if __name__ == "__main__":
