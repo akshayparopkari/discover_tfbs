@@ -8,7 +8,7 @@ are higher, as expected or lower than the mean null expected count.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.1"
+__version__ = "0.1.3"
 
 
 import argparse
@@ -19,8 +19,7 @@ from time import strftime
 
 err = []
 try:
-    from scipy.stats import describe, ks_2samp
-    from scipy.spatial.distance import jensenshannon
+    from scipy.stats import describe, ks_2samp, poisson
 except ImportError:
     err.append("scipy")
 try:
@@ -39,7 +38,6 @@ try:
 except ImportError:
     err.append("pybedtools")
 try:
-    from statsmodels.stats.proportion import proportions_ztest
     from statsmodels.stats.multitest import multipletests
 except ImportError:
     err.append("statsmodels")
@@ -199,6 +197,10 @@ def main():
         intergenic_len[region_id] = np.int16(
             entry.fields[-1].split(";")[2].split("=")[1]
         )
+
+    prior_tfbs_probability = sum(empirical_tfbs_cnt.values()) / sum(
+        intergenic_len.values()
+    )
     cnt_nobs, cnt_minmax, cnt_mean1, cnt_var, cnt_skew, cnt_kurt = describe(
         list(empirical_tfbs_cnt.values())
     )
@@ -343,31 +345,58 @@ def main():
             )
         )
     )
-
-    mean_jensen_shannon = jensenshannon(
-        np.full_like(predicted_density, expected_null_tfbs_density), predicted_density
-    )
-    nobs = len(predicted_density)
-
-    ztest_results = {
-        key: proportions_ztest(
-            cnt / intergenic_len[key], nobs, mean_jensen_shannon, "larger"
+    poisson_prob_greater = {}
+    poisson_prob_less = {}
+    expected_count = {}
+    for intergenic_region, region_length in intergenic_len.items():
+        expected_count[intergenic_region] = prior_tfbs_probability * region_length
+        poisson_prob_greater[intergenic_region] = 1 - poisson.cdf(
+            num_of_hits[intergenic_region] - 1, expected_count[intergenic_region]
         )
-        for key, cnt in num_of_hits.items()
-    }
-    pvals = [ztest[1] for ztest in ztest_results.values()]
-    p_adj = dict(zip(ztest_results.keys(), multipletests(pvals, method="fdr_bh")[1]))
+        poisson_prob_less[intergenic_region] = poisson.cdf(
+            num_of_hits[intergenic_region] - 1, expected_count[intergenic_region]
+        )
+
+    p_adj_greater = dict(
+        zip(
+            poisson_prob_greater.keys(),
+            multipletests(list(poisson_prob_greater.values()), method="fdr_bh")[1],
+        )
+    )
+
+    p_adj_less = dict(
+        zip(
+            poisson_prob_less.keys(),
+            multipletests(list(poisson_prob_less.values()), method="fdr_bh")[1],
+        )
+    )
+
     with open(args.predicted_tfbs_significance, "w") as outfile:
-        outfile.write("intergenic_region\tz_stat\tpvalue(greater)\tp_adj\n")
+        outfile.write(
+            "intergenic_region\texpected_tfbs_cnt\tpredicted_tfbs_cnt\tpvalue(greater)\tp_adj(greater)\tpvalue(less)\tp_adj(less)\n"
+        )
         try:
-            for intergenic_region, res in ztest_results.items():
+            for intergenic_region in intergenic_len.keys():
                 outfile.write(
-                    "{0}\t{1:0.3f}\t{2:0.3f}\t{3:0.3f}\n".format(
-                        intergenic_region, res[0], res[1], p_adj[intergenic_region]
+                    "{0}\t{1:0.3f}\t{2:0.1f}\t{3:0.3f}\t{4:0.3f}\t{5:0.3f}\t{6:0.3f}\n".format(
+                        intergenic_region,
+                        expected_count[intergenic_region],
+                        num_of_hits[intergenic_region],
+                        poisson_prob_greater[intergenic_region],
+                        p_adj_greater[intergenic_region],
+                        poisson_prob_less[intergenic_region],
+                        p_adj_less[intergenic_region],
                     )
                 )
         except Exception as ee:
-            print(ee, intergenic_region, res, p_adj[intergenic_region])
+            print(
+                ee,
+                intergenic_region,
+                poisson_prob_greater[intergenic_region],
+                p_adj_greater[intergenic_region],
+                poisson_prob_less[intergenic_region],
+                p_adj_less[intergenic_region],
+            )
             exit()
 
 
