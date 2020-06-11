@@ -8,12 +8,12 @@ are higher, as expected or lower than the mean null expected count.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.3"
+__version__ = "0.1.5"
 
 
 import argparse
 from collections import Counter
-from os.path import isfile
+from os.path import isfile, join, realpath
 from sys import exit
 from time import strftime
 
@@ -96,18 +96,12 @@ def handle_program_options():
         "on approximating the limit of Bernoulli trials [REQUIRED]",
     )
     parser.add_argument(
-        "predicted_tfbs_dist_output_file",
-        metavar="/path/to/predicted_tfbs_dist.pdf",
-        type=str,
-        help="Specify location and name of file to save model predicted TF binding site "
-        "distribution [REQUIRED]",
-    )
-    parser.add_argument(
         "predicted_tfbs_significance",
-        metavar="/path/to/predicted_tfbs_significance.txt",
+        metavar="/path/to/predicted_tfbs_significance_output_folder/",
         type=str,
         help="Specify location and name of file to save model predicted TF binding site "
-        "density significance [REQUIRED]",
+        "density significance. One tailed tests will be saved in individual files - "
+        "one for greater and one for less [REQUIRED]",
     )
     return parser.parse_args()
 
@@ -153,10 +147,7 @@ def main():
         exit()
     else:
         protein_name = args.protein_name.capitalize()
-        for fnh in [
-            args.null_tfbs_dist_output_file,
-            args.predicted_tfbs_dist_output_file,
-        ]:
+        for fnh in [args.null_tfbs_dist_output_file]:
             output_format = fnh.split("/")[-1].split(".")[-1]
             try:
                 assert output_format in [
@@ -357,6 +348,13 @@ def main():
             num_of_hits[intergenic_region] - 1, expected_count[intergenic_region]
         )
 
+    # Perform multiple testing correction and write to file
+    outfnh_greater = realpath(
+        join(
+            args.predicted_tfbs_significance,
+            "{0}_intergenic_tfbs_sig_greater.txt".format(args.protein_name),
+        )
+    )
     p_adj_greater = dict(
         zip(
             poisson_prob_greater.keys(),
@@ -364,6 +362,27 @@ def main():
         )
     )
 
+    with open(outfnh_greater, "w") as outfile:
+        outfile.write(
+            "intergenic_region\texpected_tfbs_cnt\tpredicted_tfbs_cnt\tpvalue(greater)\tp_adj(greater)\n"
+        )
+        for intergenic_region in intergenic_len.keys():
+            outfile.write(
+                "{0}\t{1:0.3f}\t{2:0.1f}\t{3:0.3f}\t{4:0.3f}\n".format(
+                    intergenic_region,
+                    expected_count[intergenic_region],
+                    num_of_hits[intergenic_region],
+                    poisson_prob_greater[intergenic_region],
+                    p_adj_greater[intergenic_region],
+                )
+            )
+
+    outfnh_greater = realpath(
+        join(
+            args.predicted_tfbs_significance,
+            "{0}_intergenic_tfbs_sig_less.txt".format(args.protein_name),
+        )
+    )
     p_adj_less = dict(
         zip(
             poisson_prob_less.keys(),
@@ -371,33 +390,20 @@ def main():
         )
     )
 
-    with open(args.predicted_tfbs_significance, "w") as outfile:
+    with open(outfnh_greater, "w") as outfile:
         outfile.write(
-            "intergenic_region\texpected_tfbs_cnt\tpredicted_tfbs_cnt\tpvalue(greater)\tp_adj(greater)\tpvalue(less)\tp_adj(less)\n"
+            "intergenic_region\texpected_tfbs_cnt\tpredicted_tfbs_cnt\tpvalue(less)\tp_adj(less)\n"
         )
-        try:
-            for intergenic_region in intergenic_len.keys():
-                outfile.write(
-                    "{0}\t{1:0.3f}\t{2:0.1f}\t{3:0.3f}\t{4:0.3f}\t{5:0.3f}\t{6:0.3f}\n".format(
-                        intergenic_region,
-                        expected_count[intergenic_region],
-                        num_of_hits[intergenic_region],
-                        poisson_prob_greater[intergenic_region],
-                        p_adj_greater[intergenic_region],
-                        poisson_prob_less[intergenic_region],
-                        p_adj_less[intergenic_region],
-                    )
+        for intergenic_region in intergenic_len.keys():
+            outfile.write(
+                "{0}\t{1:0.3f}\t{2:0.1f}\t{3:0.3f}\t{4:0.3f}\n".format(
+                    intergenic_region,
+                    expected_count[intergenic_region],
+                    num_of_hits[intergenic_region],
+                    poisson_prob_less[intergenic_region],
+                    p_adj_less[intergenic_region],
                 )
-        except Exception as ee:
-            print(
-                ee,
-                intergenic_region,
-                poisson_prob_greater[intergenic_region],
-                p_adj_greater[intergenic_region],
-                poisson_prob_less[intergenic_region],
-                p_adj_less[intergenic_region],
             )
-            exit()
 
 
 if __name__ == "__main__":
