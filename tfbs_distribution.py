@@ -8,7 +8,7 @@ are higher, as expected or lower than the mean null expected count.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 
 
 import argparse
@@ -306,7 +306,6 @@ def main():
             label="Mean model predicted TFBS distribution",
         )
         plt.ylabel("Frequency", color="k", fontsize=10)
-        #         plt.xlabel("{} binding site density".format(protein_name), color="k")
         plt.legend(fontsize=12)
         plt.suptitle(
             "{} binding site density".format(protein_name), y=1.01, fontsize=12
