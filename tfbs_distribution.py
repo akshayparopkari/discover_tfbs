@@ -8,18 +8,18 @@ are higher, as expected or lower than the mean null expected count.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.0.9"
+__version__ = "0.1.6"
 
 
 import argparse
 from collections import Counter
-from os.path import isfile
+from os.path import isfile, join, realpath
 from sys import exit
 from time import strftime
 
 err = []
 try:
-    from scipy.stats import describe, ks_2samp
+    from scipy.stats import describe, ks_2samp, poisson
 except ImportError:
     err.append("scipy")
 try:
@@ -37,6 +37,10 @@ try:
     from pybedtools import BedTool
 except ImportError:
     err.append("pybedtools")
+try:
+    from statsmodels.stats.multitest import multipletests
+except ImportError:
+    err.append("statsmodels")
 try:
     assert len(err) == 0
 except AssertionError:
@@ -92,11 +96,12 @@ def handle_program_options():
         "on approximating the limit of Bernoulli trials [REQUIRED]",
     )
     parser.add_argument(
-        "predicted_tfbs_dist_output_file",
-        metavar="/path/to/tf_predicted_tfbs_dist.pdf",
+        "predicted_tfbs_significance",
+        metavar="/path/to/predicted_tfbs_significance_output_folder/",
         type=str,
         help="Specify location and name of file to save model predicted TF binding site "
-        "distribution [REQUIRED]",
+        "density significance. One tailed tests will be saved in individual files - "
+        "one for greater and one for less [REQUIRED]",
     )
     return parser.parse_args()
 
@@ -142,10 +147,7 @@ def main():
         exit()
     else:
         protein_name = args.protein_name.capitalize()
-        for fnh in [
-            args.null_tfbs_dist_output_file,
-            args.predicted_tfbs_dist_output_file,
-        ]:
+        for fnh in [args.null_tfbs_dist_output_file]:
             output_format = fnh.split("/")[-1].split(".")[-1]
             try:
                 assert output_format in [
@@ -186,16 +188,21 @@ def main():
         intergenic_len[region_id] = np.int16(
             entry.fields[-1].split(";")[2].split("=")[1]
         )
+
+    prior_tfbs_probability = sum(empirical_tfbs_cnt.values()) / sum(
+        intergenic_len.values()
+    )
     cnt_nobs, cnt_minmax, cnt_mean1, cnt_var, cnt_skew, cnt_kurt = describe(
         list(empirical_tfbs_cnt.values())
     )
     len_nobs, len_minmax, len_mean1, len_var, len_skew, len_kurt = describe(
         list(intergenic_len.values())
     )
+    expected_null_tfbs_density = cnt_mean1 / len_mean1
     print(
         "{0:>20}Expected number of TFBS in an average intergenic region (Empirical) = "
         "{1:0.3f} +/- {2:0.3f}".format(
-            "", cnt_mean1 / len_mean1, np.sqrt(cnt_var) / np.sqrt(len_var)
+            "", expected_null_tfbs_density, np.sqrt(cnt_var) / np.sqrt(len_var)
         )
     )
     empirical_tfbs_density = [
@@ -298,13 +305,16 @@ def main():
             lw=3,
             label="Mean model predicted TFBS distribution",
         )
-        plt.ylabel("Frequency", color="k")
-        plt.xlabel("{} binding site density".format(protein_name), color="k")
+        plt.ylabel("Frequency", color="k", fontsize=10)
         plt.legend(fontsize=12)
+        plt.suptitle(
+            "{} binding site density".format(protein_name), y=1.01, fontsize=12
+        )
         plt.title(
             "Kolmogorov-Smirnov test ({0:0.3f}, pvalue={1:0.3f})".format(
                 ks_stat, ks_pval
-            )
+            ),
+            fontsize=11,
         )
         plt.savefig(
             args.null_tfbs_dist_output_file,
@@ -314,6 +324,85 @@ def main():
             bbox_inches="tight",
             pad_inches=0.1,
         )
+
+    ######################################################################################
+    # Per intergenic region, get collect regions with unusually high or low TFBS density #
+    ######################################################################################
+    print(
+        strftime(
+            "%x %X | Collecting high density intergenic regions for {}".format(
+                protein_name
+            )
+        )
+    )
+    poisson_prob_greater = {}
+    poisson_prob_less = {}
+    expected_count = {}
+    for intergenic_region, region_length in intergenic_len.items():
+        expected_count[intergenic_region] = prior_tfbs_probability * region_length
+        poisson_prob_greater[intergenic_region] = 1 - poisson.cdf(
+            num_of_hits[intergenic_region] - 1, expected_count[intergenic_region]
+        )
+        poisson_prob_less[intergenic_region] = poisson.cdf(
+            num_of_hits[intergenic_region] - 1, expected_count[intergenic_region]
+        )
+
+    # Perform multiple testing correction and write to file
+    outfnh_greater = realpath(
+        join(
+            args.predicted_tfbs_significance,
+            "{0}_intergenic_tfbs_sig_greater.txt".format(args.protein_name),
+        )
+    )
+    p_adj_greater = dict(
+        zip(
+            poisson_prob_greater.keys(),
+            multipletests(list(poisson_prob_greater.values()), method="fdr_bh")[1],
+        )
+    )
+
+    with open(outfnh_greater, "w") as outfile:
+        outfile.write(
+            "intergenic_region\texpected_tfbs_cnt\tpredicted_tfbs_cnt\tpvalue(greater)\tp_adj(greater)\n"
+        )
+        for intergenic_region in intergenic_len.keys():
+            outfile.write(
+                "{0}\t{1:0.3f}\t{2:0.1f}\t{3:0.3f}\t{4:0.3f}\n".format(
+                    intergenic_region,
+                    expected_count[intergenic_region],
+                    num_of_hits[intergenic_region],
+                    poisson_prob_greater[intergenic_region],
+                    p_adj_greater[intergenic_region],
+                )
+            )
+
+    outfnh_greater = realpath(
+        join(
+            args.predicted_tfbs_significance,
+            "{0}_intergenic_tfbs_sig_less.txt".format(args.protein_name),
+        )
+    )
+    p_adj_less = dict(
+        zip(
+            poisson_prob_less.keys(),
+            multipletests(list(poisson_prob_less.values()), method="fdr_bh")[1],
+        )
+    )
+
+    with open(outfnh_greater, "w") as outfile:
+        outfile.write(
+            "intergenic_region\texpected_tfbs_cnt\tpredicted_tfbs_cnt\tpvalue(less)\tp_adj(less)\n"
+        )
+        for intergenic_region in intergenic_len.keys():
+            outfile.write(
+                "{0}\t{1:0.3f}\t{2:0.1f}\t{3:0.3f}\t{4:0.3f}\n".format(
+                    intergenic_region,
+                    expected_count[intergenic_region],
+                    num_of_hits[intergenic_region],
+                    poisson_prob_less[intergenic_region],
+                    p_adj_less[intergenic_region],
+                )
+            )
 
 
 if __name__ == "__main__":
