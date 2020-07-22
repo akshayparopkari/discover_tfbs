@@ -14,12 +14,13 @@ from collections import defaultdict
 from functools import lru_cache
 from itertools import product
 from multiprocessing import Pool
+from os import remove
 from os.path import abspath, basename, isfile, join, realpath
 from random import choices
 
 # imports
 from sys import exit
-from time import strftime
+from time import localtime, strftime
 from urllib.parse import parse_qs
 from urllib.request import urlopen
 
@@ -34,7 +35,7 @@ except ImportError:
     err.add("scikit-learn")
 try:
     import matplotlib as mpl
-    import matplotlib.pyplot as plt
+    from matplotlib import pyplot as plt
 
     plt.switch_backend("agg")
 except ImportError:
@@ -244,24 +245,66 @@ def download_ca_a22_genome_annot(outfile="C_albicans_SC5314_A22_current_features
                  C_albicans_SC5314_A22_current_features.gff
     """
     try:
+        from re import compile, escape
+
         from urllib3 import PoolManager
     except AssertionError:
         exit("Please install urllib3 package")
-    # set download URL
-    gff_url = "http://www.candidagenome.org/download/gff/C_albicans_SC5314/Assembly22/C_albicans_SC5314_A22_current_features.gff"
+    else:
+        # set replacement strings and set up pattern
+        uri_decode = {
+            "%20": "_",
+            "%22": '"',
+            "%23": "#",
+            "%25": "%",
+            "%26": "&",
+            "%27": "'",
+            "%28": "(",
+            "%29": ")",
+            "%2B": "+",
+            "%2C": ",",
+            "%2F": "/",
+            "%3A": ":",
+            "%3B": ";",
+            "%3E": ">",
+            "%5B": "[",
+            "%5D": "]",
+            "_C_albicans_SC5314": "",
+        }
+        uri_decode_esc = {escape(k): v for k, v in uri_decode.items()}
+        pattern = compile("|".join(uri_decode_esc.keys()))
+        # set download URL
+        gff_url = "http://www.candidagenome.org/download/gff/C_albicans_SC5314/Assembly22/C_albicans_SC5314_A22_current_features.gff"
 
-    print("Getting GFF file content")
-    gff_data = PoolManager().request("GET", gff_url, preload_content=False)
+        print("Getting GFF file content")
+        gff_data = PoolManager().request("GET", gff_url, preload_content=False)
 
-    # settle output file name handle
-    outfnh = abspath(join("./", outfile))
+        # settle output file name handle
+        outfnh = abspath(join("./", outfile))
 
-    # write GFF content to file
-    print("Saving GFF file")
-    with open(outfnh, "wb") as outf:
-        for chunk in gff_data.stream():
-            outf.write(chunk)
-    print("GFF file saved at {0}".format(outfnh))
+        # write GFF content to file
+        with open(outfnh, "w") as outf:
+            for chunk in gff_data.stream():
+                text = pattern.sub(
+                    lambda m: uri_decode_esc[m.group(0)], chunk.decode("utf-8")
+                )
+                outf.write(text)
+
+        # remove extraneous information from feature file - i.e. first 26 lines
+        today = strftime("%Y%m%d", localtime())
+        outfnh_fixed = abspath(outfnh).replace(".gff", "_{}.gff".format(today))
+        print("Writing GFF file to {}".format(outfnh_fixed))
+        with open(outfnh_fixed, "w") as outfile:
+            with open(outfnh) as infile:
+                for line in infile:
+                    if line.startswith("#"):
+                        continue
+                    elif line.split("\t")[2] != "chromosome":
+                        outfile.write(line)
+                    else:
+                        continue
+        remove(outfnh)  # remove older file version
+        print("GFF file saved at {0}".format(outfnh_fixed))
 
 
 @profile
@@ -445,8 +488,8 @@ def sort_bed_file(inbed: str, outbed: str):
     :type outbed: str
     :param outbed: Sorted output BED6 file
     """
-    import sys
     import subprocess as sp
+    import sys
 
     try:
         import shlex
@@ -483,8 +526,8 @@ def bed_to_fasta(inbed: str, genome_file: str, outfasta: str):
     :type outfasta: str
     :param outfasta: Output file name of FASTA file
     """
-    import sys
     import subprocess as sp
+    import sys
 
     try:
         import shlex
