@@ -5,7 +5,7 @@ Create confusion matrices from training data.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.6"
+__version__ = "0.1.9"
 
 
 import argparse
@@ -18,7 +18,8 @@ from utils import permutation_result
 
 err = []
 try:
-    import matplotlib.pyplot as plt
+    import matplotlib as mpl
+    from matplotlib import pyplot as plt
 
     plt.switch_backend("agg")
 except ImportError:
@@ -32,18 +33,17 @@ try:
 except ImportError:
     err.append("pandas")
 try:
-    from sklearn.svm import SVC
-    from sklearn.model_selection import (
-        RandomizedSearchCV,
-        StratifiedShuffleSplit,
-    )
-    from sklearn.preprocessing import LabelEncoder, PowerTransformer
     from sklearn.metrics import (
         balanced_accuracy_score,
-        matthews_corrcoef,
         make_scorer,
+        matthews_corrcoef,
         plot_confusion_matrix,
+        plot_precision_recall_curve,
+        precision_recall_curve,
     )
+    from sklearn.model_selection import RandomizedSearchCV, StratifiedShuffleSplit
+    from sklearn.preprocessing import LabelEncoder, PowerTransformer
+    from sklearn.svm import SVC
 except ImportError:
     err.append("scikit-learn")
 try:
@@ -205,6 +205,7 @@ def main():
     )
     search = random_search.fit(X_train, y_train)
     y_pred = search.predict(X_test)
+    y_score = random_search.decision_function(X_test)
     mean_ba = 100 * np.mean(search.cv_results_["mean_test_Balanced_Accuracy"])
     std_ba = np.mean(search.cv_results_["std_test_Balanced_Accuracy"])
     mean_mcc = 100 * np.mean(search.cv_results_["mean_test_MCC"])
@@ -236,6 +237,40 @@ def main():
         dump_file["search"] = search
         dump(dump_file, args.save_model_file, compress=9, protocol=-1)
 
+    ############################################################
+    # Plot precision recall curve for training data (80% data) #
+    ############################################################
+    print(
+        strftime(
+            "%x %X | Saving precision recall curves to {0}".format(args.save_conf_mat)
+        )
+    )
+    y_pred = search.best_estimator_.predict(X_test)
+    acc_score = balanced_accuracy_score(y_test, y_pred)
+    y_score = random_search.decision_function(X_test)
+    precision, recall, thresholds = precision_recall_curve(y_test, y_score)
+    with mpl.style.context("ggplot"):
+        plt.figure(figsize=(8, 8))
+        plt.step(recall, precision, where="post", lw=2, color="b", alpha=1)
+        plt.fill_between(recall, precision, alpha=0.2, color="b", step="post")
+        plt.xlabel("Recall (Proportion of True samples recovered)", color="k", size=13)
+        plt.ylabel("Precision (Proportion of right classification)", color="k", size=13)
+        plt.ylim([0.0, 1.1])
+        plt.xlim([0.0, 1.1])
+        plt.title(
+            "{0} ({1:0.2f}% classification accuracy)".format(
+                protein_name, 100 * acc_score
+            )
+        )
+        plt.savefig(
+            args.save_conf_mat,
+            dpi=300.0,
+            format=output_format,
+            edgecolor="k",
+            bbox_inches="tight",
+            pad_inches=0.1,
+        )
+
     ##############################################################
     # Test significance of classification using permutation test #
     ##############################################################
@@ -246,32 +281,6 @@ def main():
         y_encoded,
         cv=cv,
         file=args.save_permute_test,
-    )
-
-    #########################
-    # Plot confusion matrix #
-    #########################
-    print(strftime("%x %X | Saving confusion matrix to {0}".format(args.save_conf_mat)))
-    y_pred = search.best_estimator_.predict(X_test)
-    acc_score = balanced_accuracy_score(y_test, y_pred)
-    disp = plot_confusion_matrix(
-        search.best_estimator_,
-        X_test,
-        y_test,
-        display_labels=["Not True", "True"],
-        values_format="3d",
-        cmap=plt.cm.Purples,
-    )
-    disp.ax_.set_title(
-        "{0} ({1:0.2f}% classification accuracy)".format(protein_name, 100 * acc_score)
-    )
-    disp.figure_.savefig(
-        args.save_conf_mat,
-        dpi=300.0,
-        format=output_format,
-        edgecolor="k",
-        bbox_inches="tight",
-        pad_inches=0.1,
     )
 
     print(strftime("\n%x %X | END CROSS VALIDATION\n"))
