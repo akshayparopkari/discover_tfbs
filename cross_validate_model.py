@@ -41,7 +41,7 @@ try:
         plot_precision_recall_curve,
         precision_recall_curve,
     )
-    from sklearn.model_selection import RandomizedSearchCV, StratifiedShuffleSplit
+    from sklearn.model_selection import GridSearchCV, StratifiedShuffleSplit
     from sklearn.preprocessing import LabelEncoder, PowerTransformer
     from sklearn.svm import SVC
 except ImportError:
@@ -186,14 +186,14 @@ def main():
     #################################
     # Build an optimized classifier #
     #################################
-    clf = SVC(kernel="linear", cache_size=500, class_weight="balanced")
+    clf = SVC(kernel="linear", cache_size=500, class_weight="balanced", probability=True)
     params = {"C": np.geomspace(0.1, 100, num=1000)}
     cv = StratifiedShuffleSplit(n_splits=10, test_size=0.2, random_state=0)
     scorers = {
         "Balanced_Accuracy": "balanced_accuracy",
         "MCC": make_scorer(matthews_corrcoef),
     }
-    random_search = RandomizedSearchCV(
+    random_search = GridSearchCV(
         clf,
         params,
         n_iter=100,
