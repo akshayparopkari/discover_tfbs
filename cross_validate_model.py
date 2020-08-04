@@ -193,19 +193,18 @@ def main():
         "Balanced_Accuracy": "balanced_accuracy",
         "MCC": make_scorer(matthews_corrcoef),
     }
-    random_search = GridSearchCV(
+    grid_search = GridSearchCV(
         clf,
         params,
-        n_iter=100,
         scoring=scorers,
         n_jobs=-1,
         cv=cv,
         refit="Balanced_Accuracy",
         random_state=0,
     )
-    search = random_search.fit(X_train, y_train)
+    search = grid_search.fit(X_train, y_train)
     y_pred = search.predict(X_test)
-    y_score = random_search.decision_function(X_test)
+    y_score = grid_search.decision_function(X_test)
     mean_ba = 100 * np.mean(search.cv_results_["mean_test_Balanced_Accuracy"])
     std_ba = np.mean(search.cv_results_["std_test_Balanced_Accuracy"])
     mean_mcc = 100 * np.mean(search.cv_results_["mean_test_MCC"])
@@ -247,7 +246,7 @@ def main():
     )
     y_pred = search.best_estimator_.predict(X_test)
     acc_score = balanced_accuracy_score(y_test, y_pred)
-    y_score = random_search.decision_function(X_test)
+    y_score = grid_search.decision_function(X_test)
     precision, recall, thresholds = precision_recall_curve(y_test, y_score)
     with mpl.style.context("ggplot"):
         plt.figure(figsize=(8, 8))
