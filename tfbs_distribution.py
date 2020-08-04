@@ -30,7 +30,7 @@ except ImportError:
     err.append("numpy")
 try:
     import matplotlib as mpl
-    import matplotlib.pyplot as plt
+    from matplotlib import pyplot as plt
 except ImportError:
     err.append("matplotlib")
 try:

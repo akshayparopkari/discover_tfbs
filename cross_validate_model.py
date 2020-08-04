@@ -14,6 +14,7 @@ from sys import exit
 from time import strftime
 
 from joblib import dump
+
 from utils import permutation_result
 
 err = []
@@ -186,7 +187,9 @@ def main():
     #################################
     # Build an optimized classifier #
     #################################
-    clf = SVC(kernel="linear", cache_size=500, class_weight="balanced", probability=True)
+    clf = SVC(
+        kernel="linear", cache_size=500, class_weight="balanced", probability=True
+    )
     params = {"C": np.geomspace(0.1, 100, num=1000)}
     cv = StratifiedShuffleSplit(n_splits=10, test_size=0.2, random_state=0)
     scorers = {
@@ -194,12 +197,7 @@ def main():
         "MCC": make_scorer(matthews_corrcoef),
     }
     grid_search = GridSearchCV(
-        clf,
-        params,
-        scoring=scorers,
-        n_jobs=-1,
-        cv=cv,
-        refit="Balanced_Accuracy",
+        clf, params, scoring=scorers, n_jobs=-1, cv=cv, refit="Balanced_Accuracy",
     )
     search = grid_search.fit(X_train, y_train)
     y_pred = search.predict(X_test)
