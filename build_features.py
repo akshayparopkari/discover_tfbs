@@ -19,7 +19,7 @@ from utils import build_feature_table, calculate_gc_percent, pac, parse_fasta
 
 err = []
 try:
-    import matplotlib.pyplot as plt
+    from matplotlib import pyplot as plt
 
     plt.switch_backend("agg")
 except ImportError:
