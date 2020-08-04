@@ -200,7 +200,6 @@ def main():
         n_jobs=-1,
         cv=cv,
         refit="Balanced_Accuracy",
-        random_state=0,
     )
     search = grid_search.fit(X_train, y_train)
     y_pred = search.predict(X_test)
