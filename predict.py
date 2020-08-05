@@ -6,7 +6,7 @@ binding site.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 
 
 import argparse
@@ -191,10 +191,10 @@ def plot_coefficients(coef, feature_names, file: str):
     top_coefficients = np.argsort(coef)
 
     # create plot
-    with mpl.style.context("ggplot"):
+    with mpl.style.context("fast"):
         plt.figure(figsize=(10, 10))
         colors = [
-            "#b20000" if c < 0 else "#008000" for c in coef[top_coefficients][::-1]
+            "#fc4f00" if c < 0 else "#aaa000" for c in coef[top_coefficients][::-1]
         ]
         plt.barh(
             range(len(coef)),
@@ -203,6 +203,7 @@ def plot_coefficients(coef, feature_names, file: str):
             hatch="//",
             tick_label=feature_names[top_coefficients][::-1],
         )
+        plt.grid(ls=":")
         plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
 
 
