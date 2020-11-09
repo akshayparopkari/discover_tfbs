@@ -8,7 +8,7 @@ are higher, as expected or lower than the mean null expected count.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.6"
+__version__ = "0.1.8"
 
 
 import argparse
@@ -170,6 +170,9 @@ def main():
     # Calculate null distribution #
     ###############################
     print(
+        "#" * 90, strftime("%x %X | START TFBS DISTRIBUTION ASSESSMENT\n"), sep="\n\n"
+    )
+    print(
         strftime(
             "%x %X | Processing {0} TFBS background distribution".format(protein_name)
         )
@@ -274,7 +277,7 @@ def main():
             "%x %X | Plotting and saving {0} density histograms".format(protein_name)
         )
     )
-    with mpl.style.context("ggplot"):
+    with mpl.style.context("fast"):
         plt.figure(figsize=(10, 5), edgecolor="k", tight_layout=True)
         plt.hist(
             empirical_tfbs_density,
@@ -305,17 +308,34 @@ def main():
             lw=3,
             label="Mean model predicted TFBS distribution",
         )
-        plt.ylabel("Frequency", color="k", fontsize=10)
-        plt.legend(fontsize=12)
-        plt.suptitle(
-            "{} binding site density".format(protein_name), y=1.01, fontsize=12
+        plt.ylabel("Frequency", color="k", fontsize=20)
+#         plt.suptitle(
+#             "{} binding site density".format(protein_name), y=1.01, fontsize=14
+#         )
+        plt.figtext(
+            0.925,
+            0.9,
+            f"{protein_name}",
+            c="w",
+            backgroundcolor="k",
+            size=20,
+            weight="bold",
+            ha="center",
+            va="center",
         )
-        plt.title(
-            "Kolmogorov-Smirnov test ({0:0.3f}, pvalue={1:0.3f})".format(
-                ks_stat, ks_pval
-            ),
-            fontsize=11,
+        plt.figtext(
+            0.85,
+            0.8,
+            f"KS test pvalue = {ks_pval:.2f}",
+            c="k",
+            size=16,
+            ha="center",
+            va="center",
         )
+#         plt.title(
+#             f"Kolmogorov-Smirnov test (pvalue={ks_pval:.2f})"
+#             fontsize=16,
+#         )
         plt.savefig(
             args.null_tfbs_dist_output_file,
             dpi=300.0,
@@ -376,7 +396,7 @@ def main():
                 )
             )
 
-    outfnh_greater = realpath(
+    outfnh_less = realpath(
         join(
             args.predicted_tfbs_significance,
             "{0}_intergenic_tfbs_sig_less.txt".format(args.protein_name),
@@ -389,7 +409,7 @@ def main():
         )
     )
 
-    with open(outfnh_greater, "w") as outfile:
+    with open(outfnh_less, "w") as outfile:
         outfile.write(
             "intergenic_region\texpected_tfbs_cnt\tpredicted_tfbs_cnt\tpvalue(less)\tp_adj(less)\n"
         )
@@ -403,6 +423,7 @@ def main():
                     p_adj_less[intergenic_region],
                 )
             )
+    print(strftime("\n%x %X | END TFBS DISTRIBUTION ASSESSMENT\n"), "#" * 90, sep="\n")
 
 
 if __name__ == "__main__":
