@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 """
-Create confusion matrices from training data.
+Cross validate linear SVC model using training data.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.9"
+__version__ = "0.3.0"
 
 
 import argparse
@@ -14,8 +14,7 @@ from sys import exit
 from time import strftime
 
 from joblib import dump
-
-from utils import permutation_result
+from utils import permutation_result, plot_coefficients
 
 err = []
 try:
@@ -34,16 +33,20 @@ try:
 except ImportError:
     err.append("pandas")
 try:
+    from sklearn.decomposition import PCA
+    from sklearn.inspection import permutation_importance
     from sklearn.metrics import (
+        average_precision_score,
         balanced_accuracy_score,
+        cohen_kappa_score,
+        fbeta_score,
         make_scorer,
         matthews_corrcoef,
-        plot_confusion_matrix,
-        plot_precision_recall_curve,
         precision_recall_curve,
     )
     from sklearn.model_selection import GridSearchCV, StratifiedShuffleSplit
-    from sklearn.preprocessing import LabelEncoder, PowerTransformer
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import MinMaxScaler, StandardScaler, label_binarize
     from sklearn.svm import SVC
 except ImportError:
     err.append("scikit-learn")
@@ -51,7 +54,7 @@ try:
     assert len(err) == 0
 except AssertionError:
     for error in err:
-        print("Please install {0}".format(error))
+        print(f"Please install {error}")
     exit()
 
 
@@ -90,13 +93,13 @@ def handle_program_options():
         "pickle file [REQUIRED]",
     )
     parser.add_argument(
-        "save_conf_mat",
+        "save_prc_plot",
         type=str,
-        metavar="/path/to/confusion_matrix_plot.pdf",
-        help="Specify location and name of the file to save the confusion"
-        " matrix plot. By default, the plots will be saved in the format "
+        metavar="/path/to/precision_recall_plot.pdf",
+        help="Specify location and name of the file to save the precision "
+        "recall plot. By default, the plots will be saved in the format "
         "specified in the file ending by the user. E.g. the "
-        "'confusion_matrix_plot.pdf' file will be saved as PDF "
+        "'precision_recall_plot.pdf' file will be saved as PDF "
         "file. For more information about file types, please read the "
         "'format' attribute of figure.savefig function on matplotlib's "
         "documentation [REQUIRED]",
@@ -113,34 +116,45 @@ def handle_program_options():
         "'format' attribute of figure.savefig function on matplotlib's "
         "documentation [REQUIRED]",
     )
+    parser.add_argument(
+        "plot_feature_contribution",
+        type=str,
+        metavar="/path/to/feature_contribution.pdf",
+        help="Specify location and name of the file to save the contribution "
+        "of all feature towards classification. By default, the plots will be saved in "
+        "the format specified in the file ending by the user. E.g. the "
+        "'feature_contribution.pdf' file will be saved as PDF "
+        "file. For more information about file types, please read the "
+        "'format' attribute of figure.savefig function on matplotlib's "
+        "documentation [REQUIRED]",
+    )
     return parser.parse_args()
 
 
 def main():
 
-    print("#" * 90, strftime("%x %X | START CROSS VALIDATION\n"), sep="\n\n")
+    print("#" * 90, "\n\n", strftime("%x %X | START CROSS VALIDATION\n"))
     args = handle_program_options()
 
     # Check input validity
     try:
         assert isfile(args.read_training_data)
     except AssertionError as e:
-        print(
-            "Input feather file do not exist. Please check supplied file - {0}".format(
-                e
-            )
-        )
+        print(f"Input feather file do not exist. Please check supplied file - {e}")
         exit()
     else:
         file_formats = ["pdf", "svg", "png", "jpg", "tiff", "eps", "ps"]
-        for argument in [args.save_conf_mat, args.save_permute_test]:
+        for argument in [
+            args.save_prc_plot,
+            args.save_permute_test,
+            args.plot_feature_contribution,
+        ]:
             output_format = argument.split("/")[-1].split(".")[-1]
             try:
                 assert output_format in file_formats
             except AssertionError:
                 print(
-                    "Error: Please check the output file format provided. '{0}' format is"
-                    " not supported in {1}.".format(output_format, argument)
+                    f"Error: Please check the output file format provided. '{output_format}' format is not supported in {argument}."
                 )
         protein_name = args.protein_name.capitalize()
         #######################################
@@ -148,37 +162,37 @@ def main():
         #######################################
         try:
             print(strftime("%x %X | Reading input feather data file"))
-            training_data = pd.read_feather(args.read_training_data)
-        except Exception as e:
-            print(
-                "Error: Please check input file {0}\\n{1}".format(
-                    args.read_training_data, e
-                )
+            training_data = (
+                pd.read_feather(args.read_training_data)
+                .drop(columns=["index"])
+                .set_index("location", verify_integrity=True)
             )
+        except Exception as e:
+            print(f"Error: Please check input file {args.read_training_data}\n{e}")
             exit()
-        else:
-            # feather file reading successful
-            training_data.set_index("index", inplace=True, verify_integrity=True)
 
     ######################################
     # Set up inputs for cross validation #
     ######################################
-    X = training_data.iloc[:, 1 : training_data.shape[1]].to_numpy()
-    y = training_data.iloc[:, 0].to_numpy()
+    X = training_data.iloc[:, 2:].to_numpy()
+    y = training_data["seq_type"].to_numpy()
 
     # Encode y labels and power transform X to make it more Gaussian
-    le = LabelEncoder()
-    y_encoded = le.fit_transform(y)
-    scaler = PowerTransformer()
-    scaler_fit = scaler.fit(X)
-    dump_file = {"scaler": scaler_fit}
-    X_transformed = scaler.transform(X)
+    y_encoded = np.ravel(label_binarize(y, classes=["Not_True", "True"]))
+    pipe = Pipeline(
+        [
+            ("scale", MinMaxScaler(copy=False)),
+            ("standardize", StandardScaler(copy=False)),
+        ]
+    )
+    dump_file = {"scaler": pipe}
+    X_transformed = pipe.fit_transform(X)
 
     ###################################################################
     # Split data into training and testing set for RandomizedSearchCV #
     ###################################################################
     print(strftime("%x %X | Tuning the hyper-parameters for classifier"))
-    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=39)
     train_indices = list(sss.split(X_transformed, y_encoded))[0][0]
     test_indices = list(sss.split(X_transformed, y_encoded))[0][1]
     X_train, X_test = X_transformed[train_indices], X_transformed[test_indices]
@@ -187,38 +201,74 @@ def main():
     #################################
     # Build an optimized classifier #
     #################################
-    clf = SVC(
-        kernel="linear", cache_size=500, class_weight="balanced", probability=True
-    )
-    params = {"C": np.geomspace(0.1, 100, num=1000)}
-    cv = StratifiedShuffleSplit(n_splits=10, test_size=0.2, random_state=0)
+    tuning_parameters = {
+        "kernel": ["linear", "rbf"],
+        "C": np.logspace(-2, 3, 1000),
+        "gamma": np.logspace(-3, 2, 5).tolist() + ["scale", "auto"],
+    }
+#     tuning_parameters = {
+#         "kernel": ["linear"],
+#         "C": np.logspace(-2, 3, 1000),
+#     }
+    cv = StratifiedShuffleSplit(n_splits=25, test_size=0.2, random_state=39)
     scorers = {
-        "Balanced_Accuracy": "balanced_accuracy",
+        "Cohens_kappa": make_scorer(cohen_kappa_score),
+        "Average_precision": make_scorer(average_precision_score),
+        "F_beta_2": make_scorer(fbeta_score, beta=2),
         "MCC": make_scorer(matthews_corrcoef),
     }
+    clf = SVC(
+        cache_size=500, probability=True, class_weight="balanced", random_state=39,
+    )
     grid_search = GridSearchCV(
-        clf, params, scoring=scorers, n_jobs=-1, cv=cv, refit="Balanced_Accuracy",
+        clf,
+        tuning_parameters,
+        scoring=scorers,
+        n_jobs=-1,
+        cv=cv,
+        refit="Average_precision",
     )
     search = grid_search.fit(X_train, y_train)
-    y_pred = search.predict(X_test)
-    y_score = grid_search.decision_function(X_test)
-    mean_ba = 100 * np.mean(search.cv_results_["mean_test_Balanced_Accuracy"])
-    std_ba = np.mean(search.cv_results_["std_test_Balanced_Accuracy"])
-    mean_mcc = 100 * np.mean(search.cv_results_["mean_test_MCC"])
-    std_mcc = np.mean(search.cv_results_["std_test_MCC"])
     print(
         strftime(
-            "%x %X | Classification scores for {0} - (higher percent is better)".format(
-                protein_name
-            )
-        ),
-        "{0:>20}Mean accuracy score: {1:0.2f} +/- {2:0.2f}%".format(
-            "", mean_ba, std_ba
-        ),
-        "{0:>20}Mean Matthews correlation coefficient: {1:0.2f} +/- {2:0.2f}%".format(
-            "", mean_mcc, std_mcc
-        ),
-        sep="\n",
+            f"%x %X | Best parameters set found on development set: {search.best_params_}"
+        )
+    )
+    y_pred = search.predict(X_test)
+    y_score = search.decision_function(X_test)
+    print(
+        strftime(
+            f"%x %X | Classification scores for {protein_name} - (higher percent is better)"
+        )
+    )
+    print(
+        strftime(
+            f"%x %X | Mean cross-validated score of the best_estimator: {search.best_score_:.2%}"
+        )
+    )
+    for scorer in scorers.keys():
+        cv_key = f"mean_test_{scorer}"
+        mean_score = 100 * np.mean(search.cv_results_[cv_key])
+        cv_key = f"std_test_{scorer}"
+        std_score = np.mean(search.cv_results_[cv_key])
+        print(f"{'': >20}Mean {scorer} score: {mean_score: 0.2F} +/- {std_score: 0.2%}")
+
+    ###############################################
+    # Feature contribution towards classification #
+    ###############################################
+    print(
+        strftime(
+            f"%x %X | Saving feature importance ranking plot to {args.plot_feature_contribution}"
+        )
+    )
+    res = permutation_importance(
+        search.best_estimator_, X_test, y_test, n_repeats=25, n_jobs=-1, random_state=39
+    )
+    plot_coefficients(
+        res,
+        training_data.columns[2:].tolist(),
+        protein_name,
+        args.plot_feature_contribution,
     )
 
     ##############################
@@ -227,39 +277,48 @@ def main():
     try:
         assert args.save_model_file.endswith(".z")
     except AssertionError:
+        # add compression file ending
         args.save_model_file += ".z"
     else:
-        print(strftime("%x %X | Saving model file to {0}".format(args.save_model_file)))
+        print(strftime(f"%x %X | Saving model file to {args.save_model_file}"))
         dump_file["search"] = search
         dump(dump_file, args.save_model_file, compress=9, protocol=-1)
 
     ############################################################
     # Plot precision recall curve for training data (80% data) #
     ############################################################
-    print(
-        strftime(
-            "%x %X | Saving precision recall curves to {0}".format(args.save_conf_mat)
-        )
-    )
-    y_pred = search.best_estimator_.predict(X_test)
+    print(strftime(f"%x %X | Saving precision recall curves to {args.save_prc_plot}"))
     acc_score = balanced_accuracy_score(y_test, y_pred)
-    y_score = grid_search.decision_function(X_test)
+    avg_precision = average_precision_score(y_test, y_pred, average="weighted")
     precision, recall, thresholds = precision_recall_curve(y_test, y_score)
-    with mpl.style.context("ggplot"):
-        plt.figure(figsize=(8, 8))
+    with mpl.style.context("fast"):
+        plt.figure(figsize=(8, 8), edgecolor="k", tight_layout=True)
         plt.step(recall, precision, where="post", lw=2, color="b", alpha=1)
         plt.fill_between(recall, precision, alpha=0.2, color="b", step="post")
-        plt.xlabel("Recall (Proportion of True samples recovered)", color="k", size=13)
-        plt.ylabel("Precision (Proportion of right classification)", color="k", size=13)
+        plt.xlabel("Recall (Proportion of true samples recovered)", color="k", size=20)
+        plt.ylabel(
+            "Precision (Proportion of correct classification)", color="k", size=20
+        )
         plt.ylim([0.0, 1.1])
         plt.xlim([0.0, 1.1])
         plt.title(
-            "{0} ({1:0.2f}% classification accuracy)".format(
-                protein_name, 100 * acc_score
-            )
+            f"{avg_precision: 0.2%} precision | {acc_score: 0.2%} accuracy",
+            fontsize=20,
+            color="k",
+        )
+        plt.figtext(
+            0.91,
+            0.91,
+            f"{args.protein_name.capitalize()}",
+            c="w",
+            backgroundcolor="k",
+            size=20,
+            weight="bold",
+            ha="center",
+            va="center",
         )
         plt.savefig(
-            args.save_conf_mat,
+            args.save_prc_plot,
             dpi=300.0,
             format=output_format,
             edgecolor="k",
@@ -272,6 +331,7 @@ def main():
     ##############################################################
     print(strftime("%x %X | Running permutation tests to assess model accuracy"))
     permutation_result(
+        protein_name,
         search.best_estimator_,
         X_transformed,
         y_encoded,
