@@ -5,21 +5,20 @@ Create background sequences from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.2.9"
+__version__ = "0.3.4"
 
 
 import argparse
 from os import mkdir
 from os.path import abspath, exists, isfile, join
-from random import choices, randint, random
+from random import choice, randint, random
 from sys import exit
-from time import localtime, strftime
+from time import strftime
 
 from utils import (
-    calculate_gc_percent,
     dna_iupac_codes,
+    gc_len_matched_bkg_seq_gen,
     get_transmat,
-    markov_seq,
     parse_fasta,
     random_dna,
 )
@@ -33,6 +32,10 @@ else:
         dnashaper = importr("DNAshapeR")
     except Exception:
         exit("\nPlease install bioconductor-dnashaper package.\n")
+try:
+    import pandas as pd
+except ImportError:
+    exit("\nPlease install pandas package\n")
 
 
 def handle_program_options():
@@ -90,7 +93,7 @@ def handle_program_options():
         default=1,
         help="Percent tolerance allowed for matching GC content of "
         "background sequence with foreground sequence. The default value "
-        "is 2 percent difference between background and foreground "
+        "is one percent difference between background and foreground "
         "sequence. A value of zero will increase eexecution time for this"
         " script.",
     )
@@ -214,6 +217,7 @@ def shuffleEdgeList(L):
 
 
 def dinuclShuffle(s):
+    s = s if len(dna_iupac_codes(s)) == 1 else choice(dna_iupac_codes(s))
     ok = 0
     while not ok:
         ok, edgeList, nuclList, lastCh = eulerian(s)
@@ -238,19 +242,30 @@ def dinuclShuffle(s):
         prevCh = ch
     L.append(s[-1])
     t = "".join(L)
-    return t
+    return random_dna(2, False) + t + random_dna(2, False)
 
 
 ##########################################################################################
 
 
-def main():
+def mono_nt_shuffle(seqA: str) -> str:
+    """
+    Given a input sequence seqA, return its Durstenfeld shuffled version
+    """
+    shuffled_seqA = []
+    for nt in seqA:
+        shuffled_seqA_len = len(shuffled_seqA)
+        j = randint(0, shuffled_seqA_len)
+        if j == shuffled_seqA_len:
+            shuffled_seqA.append(nt)
+        else:
+            shuffled_seqA.append(shuffled_seqA[j])
+            shuffled_seqA[j] = nt
+    return random_dna(2, False) + "".join(shuffled_seqA) + random_dna(2, False)
 
-    print(
-        "#" * 90,
-        strftime("%x %X | START GENERATION OF BACKGROUND SEQUENCES\n"),
-        sep="\n\n",
-    )
+
+def main():
+    print("#" * 90, "\n\n", strftime("%x %X | START BACKGROUND SEQUENCES GENERATION\n"))
     args = handle_program_options()
 
     try:
@@ -265,99 +280,92 @@ def main():
         # parse foreground sequence FASTA file
         print(
             strftime(
-                "%x %X | Parsing foreground sequence FASTA file {0}".format(
-                    args.fg_fasta_file
-                )
+                f"%x %X | Parsing foreground sequence FASTA file {args.fg_fasta_file}"
             )
         )
-        fg_seqs = {header: seq for header, seq in parse_fasta(args.fg_fasta_file)}
+        fg_seqs_df = (
+            pd.DataFrame.from_dict(
+                {header: seq for header, seq in parse_fasta(args.fg_fasta_file)},
+                orient="index",
+                columns=["sequence"],
+            )
+            .reset_index()
+            .rename(columns={"index": "location"})
+        )
 
-    try:
-        outdir = abspath(args.output_dir)
-        assert exists(outdir)
-    except AssertionError:
-        # output directory doesn't exist, create it
-        mkdir(outdir)
-    else:
-        # get output file path and name
-        outfnh = join(outdir, "{}_bkg_seqs.fasta".format(args.protein_name))
+        try:
+            outdir = abspath(args.output_dir)
+            assert exists(outdir)
+        except AssertionError:
+            # output directory doesn't exist, create it
+            mkdir(outdir)
+        else:
+            # get output file path and name
+            outfnh = join(outdir, f"{args.protein_name}_bkg_seqs.fasta")
 
+    if args.mononucleotide_shuffle:
+        ################################################
+        # MONONUCLEOTIDE SHUFFLED FOREGROUND SEQUENCES #
+        # Durstenfeld shuffle                          #
+        ################################################
+        print(
+            strftime("%x %X | Generating mononucleotide shuffled background sequences")
+        )
+        fg_seqs_df["mononuc_shuffled_bkg_seq"] = fg_seqs_df["sequence"].apply(
+            mono_nt_shuffle
+        )
+
+    ##############################################
+    # DINUCLEOTIDE SHUFFLED FOREGROUND SEQUENCES #
+    ##############################################
+    print(strftime("%x %X | Generating dinucleotide shuffled background sequences"))
+    fg_seqs_df["dinuc_shuffled_bkg_seq"] = fg_seqs_df["sequence"].apply(dinuclShuffle)
+
+    ################################################################
+    # GC CONTENT AND LENGTH MATCHED BACKGROUND SEQUENCE GENERATION #
+    ################################################################
     # parse unrelated genome FASTA files containing CDS sequences
     print(
-        strftime("%x %X | Calculating transition probability from genome FASTA files")
+        strftime("%x %X | Calculating transition probability for non-Candida genomes")
     )
-    cds_transmat = dict()
     degree = 2
-    for f in args.genome_fasta_files:
-        cds_transmat[f.split("/")[-1]] = get_transmat(f, degree)
+    cds_transmat = {
+        f.split("/")[-1].split("_")[0]: get_transmat(f, degree)
+        for f in args.genome_fasta_files
+    }
+    print(
+        strftime(
+            "%x %X | Generating GC content and length matched background sequences"
+        )
+    )
+    fg_seqs_df["gc_len_matched_bkg"] = fg_seqs_df["sequence"].apply(
+        gc_len_matched_bkg_seq_gen, args=(cds_transmat, list(fg_seqs_df["sequence"]),)
+    )
 
-    print(strftime("%x %X | Writing background sequences to {0}".format(outfnh)))
+    print(strftime(f"%x %X | Writing background sequences to {outfnh}"))
+    fg_seqs_df = fg_seqs_df.sample(frac=1.0, random_state=39)
     with open(outfnh, "w") as outf:
-        for header, seq in fg_seqs.items():
-            for entry in dna_iupac_codes(seq):
-
-                if args.mononucleotide_shuffle:
-                    ################################################
-                    # MONONUCLEOTIDE SHUFFLED FOREGROUND SEQUENCES #
-                    # Durstenfeld shuffle                          #
-                    ################################################
-                    outf.write(">mononuc_shuffled_bkg_for_{}\n".format(header))
-                    shuff_seq = []
-                    for nt in entry:
-                        j = randint(0, len(shuff_seq))
-                        if j == len(shuff_seq):
-                            shuff_seq.append(nt)
-                        else:
-                            shuff_seq.append(shuff_seq[j])
-                            shuff_seq[j] = nt
-                    # pad with 2 random nucleotides
-                    shuff_seq = (
-                        random_dna(2, False) + "".join(shuff_seq) + random_dna(2, False)
-                    )
-                    outf.write("{}\n".format("".join(shuff_seq)))
-
-                ##############################################
-                # DINUCLEOTIDE SHUFFLED FOREGROUND SEQUENCES #
-                ##############################################
-                outf.write(">dinuc_shuffled_bkg_for_{}\n".format(header))
-                # pad with 2 random nucleotides
-                shuff_seq = (
-                    random_dna(2, False) + dinuclShuffle(entry) + random_dna(2, False)
-                )
-                outf.write("{}\n".format(shuff_seq))
-
-                ################################################################
-                # GC CONTENT AND LENGTH MATCHED BACKGROUND SEQUENCE GENERATION #
-                ################################################################
-                outf.write(">gc_len_matched_bkg_for_{}\n".format(header))
-                gc = round(calculate_gc_percent(seq))
-                seq_len = len(seq)
-                random_key = choices(list(cds_transmat.keys()))[0]
-                while True:
-                    gc_len_seq = markov_seq(
-                        seq_len, random_dna(2, False), cds_transmat[random_key]
-                    )
-                    core_seq = gc_len_seq[2:-2]
-                    if core_seq not in fg_seqs.values():
-                        gc_diff = abs(gc - round(calculate_gc_percent(core_seq)))
-                        if gc_diff <= args.tolerance:
-                            outf.write("{}\n".format(gc_len_seq))
-                            break
+        for bkg, data in (
+            fg_seqs_df.set_index("location", verify_integrity=True)
+            .drop(columns=["sequence"])
+            .to_dict()
+            .items()
+        ):
+            for location, seq in data.items():
+                outf.write(f">{bkg + '_for_' + location}\n{seq}\n")
 
     ######################################################
     # CALCULATE DNA SHAPE VALUE FOR BACKGROUND SEQUENCES #
     ######################################################
     print(
         strftime(
-            "%x %X | Writing background sequences shape data to {0}".format(
-                abspath(args.output_dir)
-            )
+            f"%x %X | Writing background sequences shape data to {abspath(args.output_dir)}"
         )
     )
     for shape in ["MGW", "Roll", "HelT", "ProT", "EP"]:
         dnashaper.getDNAShape(outfnh, shape)
 
-    print(strftime("\n%x %X | END GENERATION OF BACKGROUND SEQUENCES\n"))
+    print(strftime("\n%x %X | END BACKGROUND SEQUENCES GENERATION\n"))
 
 
 if __name__ == "__main__":
