@@ -6,7 +6,7 @@ predicted TFBS.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.1.2"
+__version__ = "0.2.5"
 
 
 import argparse
@@ -14,10 +14,21 @@ from os.path import isfile
 from sys import exit
 from time import strftime
 
+from utils import get_closest_genes
+
+err = []
 try:
     from pybedtools import BedTool
 except ImportError:
-    err.append("Please install pybedtools")
+    err.append("pybedtools")
+try:
+    import pandas as pd
+except ImportError:
+    err.append("pandas")
+if len(err) > 0:
+    for e in err:
+        print(f"Please install {e}")
+    exit()
 
 
 def handle_program_options():
@@ -65,6 +76,14 @@ def handle_program_options():
         " columns [REQUIRED]",
     )
     parser.add_argument(
+        "temporal_rnaseq",
+        metavar="/path/to/temporal_rnaseq.xlsx",
+        type=str,
+        help="Specify location and name of supplementary Excel file from Fox et al. "
+        "2015 publication found here - https://onlinelibrary.wiley.com/doi/full/10.1111/mmi.13002"
+        " [REQUIRED]",
+    )
+    parser.add_argument(
         "output_file",
         metavar="/path/to/closest_gene_to_model_predicted_tfbs.bed",
         type=str,
@@ -78,14 +97,51 @@ def handle_program_options():
         help="Specify location and name of file to save the unique closest gene to all "
         "positive TFBS predictions from model. [REQUIRED]",
     )
+    parser.add_argument(
+        "stage_activity",
+        metavar="/path/to/tfbs_gene_activity_per_stage.txt",
+        type=str,
+        help="Specify location and name of file to save TFBS-target gene activity. "
+        "For each of the four biofilm developement stages, all TFBS-gene "
+        "interactions will be assigned either UP, DOWN or NONE values based "
+        "on Fox et al. 2015 temporal gene expression data set [REQUIRED]",
+    )
+    parser.add_argument(
+        "gexf_network_file",
+        metavar="/path/to/tf_gene_network.gexf",
+        type=str,
+        help="Specify location and name of file to save TFBS-target gene network "
+        "file in GEXF format. Positive and negative regulation will be shown in "
+        "green and red colors, respectively. [REQUIRED]",
+    )
     return parser.parse_args()
+
+
+def str_split(instr: str) -> str:
+    """
+    Given an input string of format ""(orf19.2823) HMG domain transcriptional repres...""
+    return the orf ID "orf19.2823" from the input.
+    """
+    return instr.split(")")[0].replace("(", "")
+
+
+def gene_regulation(value: float) -> str:
+    """
+    Given an expression value for a gene, return if it is UP (>1 LFC), DOWN (< -1 LFC) or "None" (-1 LFC > x > 1 LFC) regulated.
+    """
+    if value > 1.0:
+        return "UP"
+    elif value < -1.0:
+        return "DOWN"
+    else:
+        return "None"
 
 
 def main():
 
     args = handle_program_options()
 
-    print("#" * 90, strftime("%x %X | START TFBS-GENE ASSOCIATION\n"), sep="\n\n")
+    print("#" * 90, "\n\n", strftime("%x %X | START TFBS-GENE ASSOCIATION\n"))
 
     # Check input validity
     try:
@@ -93,26 +149,26 @@ def main():
         assert isfile(args.genome_feature_file)
         assert isfile(args.fg_bed_file)
     except Exception as e:
-        print("Error with input file(s). Please review the error\n{0}".format(e))
+        print(f"Error with input file(s). Please review the error\n{e}")
         exit()
     else:
         protein_name = args.protein_name.capitalize()
 
-    ######################################
-    # Signal recovery from previous data #
-    ######################################
+    ###########################################
+    # Signal recovery from Nobile et al. 2012 #
+    ###########################################
     true_tfbs = BedTool(args.fg_bed_file)
     predicted_tfbs = BedTool(args.prediction_results)
     overlap_count = len(true_tfbs.intersect(predicted_tfbs, u=True))
-    overlap_pct = 100 * (overlap_count / len(true_tfbs))
     print(
         strftime(
-            "%x %X | {0} ({1:0.2f}%) were entries predicted true out of {2} entries "
-            "from {3}".format(
-                overlap_count, overlap_pct, len(true_tfbs), args.fg_bed_file
-            )
+            f"%x %X | {overlap_count} ({overlap_count / len(true_tfbs): .2%}) were TFBS predicted true out of {len(true_tfbs)} entries "
+            "from {args.fg_bed_file}"
         )
     )
+    genome_file = BedTool(args.genome_feature_file)
+    true_tfbs_closest_orfs_df = get_closest_genes(true_tfbs, genome_file)
+    true_tfbs_target_orf_counts = len(true_tfbs_closest_orfs_df["Systematic_Name"])
 
     ##############################
     # Gather all intergenic hits #
@@ -123,87 +179,122 @@ def main():
             genome_intergenic_regions, f=1.0, wa=True
         ).sort()
     except Exception as err:
-        exit(print(err))
+        exit(err)
     else:
         #######################################################
         # Gathering closest gene for each positive prediction #
         #######################################################
-        genome_file = BedTool(args.genome_feature_file)
         try:
             closest_gene = predicted_intergenic_hits.closest(
                 genome_file, D="b", output=args.output_file,
             )
         except Exception as err:
-            exit(print(err))
+            exit(err)
         else:
             print(
                 strftime(
-                    "%x %X | Writing all closest gene ID to BED file {0}".format(
-                        args.output_file
-                    )
+                    f"%x %X | Writing all closest gene ID to BED file {args.output_file}"
                 )
             )
 
         ################################################################
         # Get unique feature information for each closest gene feature #
         ################################################################
-        orfs = {}
-        with open(args.output_file) as infile:
-            for line in infile:
-                line = line.strip().split("\t")
-                for entry in line[12].split(";"):
-                    if entry.startswith("Gene="):
-                        try:
-                            orfs[orfid]["gene"] = entry.split("=")[1]
-                        except KeyError:
-                            orfs[orfid] = {
-                                "counts": 1,
-                                "function": orf_function,
-                                "gene": entry.split("=")[1],
-                                "distance": 0,
-                            }
-                    if entry.startswith("Note="):
-                        feat = entry.split("Note=")[1]
-                        orfid = feat.split("_")[0][1:-1]
-                        orf_function = " ".join(feat.split("_")[1:])
-                        try:
-                            orfs[orfid]["counts"] += 1
-                            orfs[orfid]["function"] = orf_function
-                        except KeyError:
-                            orfs[orfid] = {
-                                "counts": 1,
-                                "function": orf_function,
-                                "gene": "NA",
-                                "distance": 0,
-                            }
-                    if entry.startswith("_"):
-                        orfs[orfid]["function"] += entry.replace("_", " ")
-                try:
-                    orfs[orfid]["distance"] += int(line[13])
-                except KeyError:
-                    # no orfid found since there was no match from
-                    continue
         print(
             strftime(
-                "%x %X | Writing unique closest orfs to model predicted TFBS to {0}".format(
-                    args.orfs_output_file
-                )
+                f"%x %X | Writing unique closest orfs to model predicted TFBS to {args.orfs_output_file}"
             )
         )
-        with open(args.orfs_output_file, "w") as outfile:
-            outfile.write("ORF_ID\tGene\tOccurrences\tMean distance\tFunction\n")
-            for orfid, data in orfs.items():
-                outfile.write(
-                    "{0}\t{1}\t{2}\t{3:.2f}\t{4}\n".format(
-                        orfid,
-                        data["gene"],
-                        data["counts"],
-                        data["distance"] / data["counts"],
-                        data["function"],
-                    )
-                )
+        orfs_df = get_closest_genes(predicted_intergenic_hits, genome_file)
+        common_target_orfs = len(
+            set(orfs_df["Systematic_Name"]).intersection(
+                set(true_tfbs_closest_orfs_df["Systematic_Name"])
+            )
+        )
+        print(
+            strftime(
+                f"%x %X | {common_target_orfs} ({common_target_orfs / true_tfbs_target_orf_counts: .2%}) common target ORFs between true TFBS and model predicted TFBS"
+            )
+        )
 
-    print(strftime("\n%x %X | END TFBS-GENE ASSOCIATION\n"), "#" * 90, sep="\n")
+        # Read in Fox 2015 data and merge predicted tfbs genes with their expression value
+        orfs_df["ORF"] = orfs_df["Gene_Function"].apply(str_split)
+        fox_temporal_data = pd.read_excel(
+            "/home/aparopkari/endor/fox_supplementals/MMI_13002_supp-0002-Dataset1_temporalexp.xlsx",
+            index_col=None,
+            usecols=[
+                "ORF",
+                "Name",
+                "Description",
+                "Ad vs Sat Avg",
+                "8h vs Sat Avg",
+                "24h vs Sat Avg",
+                "48h vs Sat Avg",
+            ],
+        )
+        orfs_df = orfs_df.merge(fox_temporal_data, left_on="ORF", right_on="ORF")
+        orfs_df = orfs_df.loc[
+            :,
+            [
+                "ORF",
+                "Systematic_Name",
+                "Gene_Name",
+                "Closest_TFBS_Counts",
+                "Mean_dist_from_gene",
+                "Name",
+                "Ad vs Sat Avg",
+                "8h vs Sat Avg",
+                "24h vs Sat Avg",
+                "48h vs Sat Avg",
+                "Gene_Function",
+                "Description",
+            ],
+        ]
+        orfs_df.to_csv(args.orfs_output_file, sep="\t", index=False, na_rep="NA")
+
+        ##################################
+        # Write TF-gene activity results #
+        ##################################
+        orfs_df["Gene_expression_stage_1"] = orfs_df["Ad vs Sat Avg"].apply(
+            gene_regulation
+        )
+        orfs_df["Gene_expression_stage_2"] = orfs_df["8h vs Sat Avg"].apply(
+            gene_regulation
+        )
+        orfs_df["Gene_expression_stage_3"] = orfs_df["24h vs Sat Avg"].apply(
+            gene_regulation
+        )
+        orfs_df["Gene_expression_stage_4"] = orfs_df["48h vs Sat Avg"].apply(
+            gene_regulation
+        )
+        orfs_df = orfs_df.loc[
+            :,
+            [
+                "ORF",
+                "Systematic_Name",
+                "Gene_Name",
+                "Gene_expression_stage_1",
+                "Gene_expression_stage_2",
+                "Gene_expression_stage_3",
+                "Gene_expression_stage_4",
+                "Description",
+            ],
+        ]
+        print(
+            strftime(
+                f"%x %X | Writing stage-dependent TF-gene activity to {args.stage_activity}"
+            )
+        )
+        orfs_df.to_csv(args.stage_activity, sep="\t", index=False, na_rep="NA")
+
+        print(
+            strftime(
+                f"%x %X | Writing TF-gene activity network file to {args.gexf_network_file}"
+            )
+        )
+        positive_edges = list(product([tf.capitalize()], tf_gene_activity_data["ORF"][tf_gene_activity_data["Gene_expression_stage_1"] == "UP"], [{"color": "#3532dc"}]))
+        positive_edges = list(product([tf.capitalize()], tf_gene_activity_data["ORF"][tf_gene_activity_data["Gene_expression_stage_1"] == "DOWN"], [{"color": "#d9dc32"}]))
+    print(strftime("\n%x %X | END TFBS-GENE ASSOCIATION\n"), sep="\n")
 
 
 if __name__ == "__main__":
