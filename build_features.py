@@ -5,17 +5,16 @@ Build feature table from input FASTA files.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 
 
 import argparse
-from collections import defaultdict
-from itertools import product, starmap
+from itertools import product
 from os.path import abspath, isfile
 from sys import exit
 from time import strftime
 
-from utils import build_feature_table, calculate_gc_percent, pac, parse_fasta
+from utils import build_feature_table, parse_fasta
 
 err = []
 try:
@@ -32,6 +31,19 @@ try:
     import pandas as pd
 except ImportError:
     err.append("pandas")
+try:
+    import matplotlib as mpl
+    from matplotlib import pyplot as plt
+
+    plt.switch_backend("agg")
+except ImportError:
+    err.append("matplotlib")
+try:
+    from sklearn.decomposition import PCA
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import MinMaxScaler, StandardScaler, label_binarize
+except ImportError:
+    err.append("sklearn")
 try:
     assert len(err) == 0
 except AssertionError:
@@ -100,6 +112,17 @@ def handle_program_options():
         "For more details about feather format, please check "
         "https://github.com/wesm/feather/tree/master/python [REQUIRED]",
     )
+    parser.add_argument(
+        "save_pca_plot",
+        type=str,
+        metavar="/path/to/pca_plot.pdf",
+        help="Specify location and name of the file to save the principal"
+        " component plot. By default, the plots will be saved in the format "
+        "specified in the file ending by the user. E.g. the 'pca_plot.pdf' "
+        "file will be saved as PDF file. For more information about file types"
+        ", please read the 'format' attribute of figure.savefig function "
+        "on matplotlib's documentation [REQUIRED]",
+    )
     return parser.parse_args()
 
 
@@ -137,7 +160,7 @@ def all_possible_seq_pairs(list1, fg_seqs):
     :type fg_seqs: array-like
     :param fg_seqs: Array of foreground sequences
     """
-    return (list(product([seq], fg_seqs)) for seq in list1)
+    return (list(product(fg_seqs, [seq])) for seq in list1)
 
 
 def main():
@@ -153,66 +176,39 @@ def main():
     except AssertionError as err:
         print("Error: Please check supplied FASTA file\n{0}".format(err))
         exit()
+    else:
+        output_format = args.save_pca_plot.split("/")[-1].split(".")[-1]
+        try:
+            assert output_format in ["pdf", "svg", "png", "jpg", "tiff", "eps", "ps"]
+        except AssertionError:
+            print(
+                "Error: Please check the output file format provided. '{0}' format is"
+                " not supported in {1}.".format(output_format, args.output_format)
+            )
 
     ###################################
     # Processing foreground sequences #
     ###################################
     print(strftime("%x %X | Processing foreground FASTA file"))
+    shape_data = {
+        file.split(".")[-1]: {
+            header: seq.strip().split(",") for header, seq in parse_fasta(file)
+        }
+        for file in args.genome_wide_shape_fasta_file
+    }
     print("=" * 90, sep="\n")
     positive_data_df = build_feature_table(
-        args.fg_fasta_file,
-        args.fg_fasta_file,
-        args.fg_bed_file,
-        args.genome_wide_shape_fasta_file,
+        args.fg_fasta_file, args.fg_fasta_file, shape_data, minhash=True
     )
-    positive_data_df.insert(0, "seq_type", "True")
+    positive_data_df.insert(1, "seq_type", "True")
 
     ###################################
     # Processing background sequences #
     ###################################
     print(strftime("\n%x %X | Processing background FASTA file"))
     print("=" * 90, sep="\n")
-
-    # get all background sequences
-    print(strftime("%x %X | Reading FASTA file"))
-    bkg_seqs = defaultdict(dict)
-    bkg_seqs[args.protein_name]["header"] = np.asarray(
-        [name for name, seq in parse_fasta(args.bkg_fasta_file)]
-    )
-    bkg_seqs[args.protein_name]["seqs"] = np.asarray(
-        [seq for name, seq in parse_fasta(args.bkg_fasta_file)]
-    )
-
-    # get GC percent for all background sequences
-    print(strftime("%x %X | Calculating GC percent"))
-    bkg_gc = {
-        tf: map_headers_to_values(
-            data["header"], list(map(calculate_gc_percent, data["seqs"]))
-        )
-        for tf, data in bkg_seqs.items()
-    }
-
-    # calculating poisson based metrics
-    print(strftime("%x %X | Calculating Poisson based metrics"))
-    fg_seqs = defaultdict(dict)
-    fg_seqs[args.protein_name]["header"] = np.asarray(
-        [name for name, seq in parse_fasta(args.fg_fasta_file)]
-    )
-    fg_seqs[args.protein_name]["seqs"] = np.asarray(
-        [seq for name, seq in parse_fasta(args.fg_fasta_file)]
-    )
-    bkg_seq_pairs = all_possible_seq_pairs(
-        bkg_seqs[args.protein_name]["seqs"], fg_seqs[args.protein_name]["seqs"]
-    )
-    bkg_poisson_metrics = np.asarray(
-        [
-            np.asarray(list(starmap(pac, pair_set))).mean(axis=0, dtype=np.float64)
-            for pair_set in bkg_seq_pairs
-        ]
-    )
-
-    bkg_pac = map_headers_to_values(
-        bkg_seqs[args.protein_name]["header"], bkg_poisson_metrics
+    negative_data_df = build_feature_table(
+        args.bkg_fasta_file, args.fg_fasta_file, minhash=True
     )
 
     # collate all DNA shape values
@@ -222,55 +218,119 @@ def main():
         whichshape = shapefile.split(".")[-1]
         if whichshape in ["MGW", "ProT", "EP"]:
             for name, shape in parse_fasta(abspath(shapefile)):
-                shape = shape.split(",")
+                shape = shape.strip().split(",")
                 if not bkg_shapes.get(name):
                     bkg_shapes[name] = dict()
-                for i in range(2, len(shape) - 2):
-                    position = "{0}_pos_{1}".format(whichshape, i + 1)
-                    bkg_shapes[name][position] = float(shape[i])
+                for i, val in enumerate(shape[2:-2]):
+                    position = "{0}_{1:02d}".format(whichshape, i + 1)
+                    try:
+                        bkg_shapes[name][position] = float(val)
+                    except Exception:
+                        bkg_shapes[name][position] = 0.0
         else:
             # shape is Roll or HelT
             for name, shape in parse_fasta(abspath(shapefile)):
                 shape = shape.split(",")
                 if not bkg_shapes.get(name):
                     bkg_shapes[name] = dict()
-                for i in range(1, len(shape) - 1):
-                    position = "{0}_pos_{1}".format(whichshape, i + 1)
-                    bkg_shapes[name][position] = float(shape[i])
+                for i, val in enumerate(shape[1:-1]):
+                    position = "{0}_{1:02d}".format(whichshape, i + 1)
+                    try:
+                        bkg_shapes[name][position] = float(val)
+                    except Exception:
+                        bkg_shapes[name][position] = 0.0
 
     print(strftime("%x %X | Creating background training dataset"))
-    gc_data_df = pd.DataFrame.from_dict(
-        bkg_gc[args.protein_name], orient="index", columns=["GC_percent"]
-    )
-    pac_data_df = pd.DataFrame.from_dict(
-        bkg_pac, orient="index", columns=["PAS", "PPS"]
-    )
-    shapes_data_df = pd.DataFrame.from_dict(bkg_shapes, orient="index")
-    negative_data_df = gc_data_df.merge(
-        pac_data_df, how="outer", left_index=True, right_index=True
+    shapes_data_df = (
+        pd.DataFrame.from_dict(bkg_shapes, orient="index")
+        .reset_index()
+        .rename(columns={"index": "location"})
     )
     negative_data_df = negative_data_df.merge(
-        shapes_data_df, how="outer", left_index=True, right_index=True
+        shapes_data_df, how="left", left_on="location", right_on="location"
     )
-    negative_data_df.insert(0, "seq_type", "Not_True")
+    negative_data_df.insert(1, "seq_type", "Not_True")
 
     ###########################################
     # Save training dataset to a feather file #
     ###########################################
-    if args.save_training_data:
-        training_data = pd.concat([positive_data_df, negative_data_df], sort=False)
-        training_data = training_data.dropna(axis=1)  # drop columns with any NaN
-        # convert row index to a column called 'index', since feather format doesn't
-        # support row indexing
-        training_data = training_data.reset_index()
-        print(
-            strftime(
-                "%x %X | Saving {0} background training dataset to {1}".format(
-                    args.protein_name, args.save_training_data
-                )
+    training_data = pd.concat([positive_data_df, negative_data_df], sort=False)
+    training_data = training_data.dropna(axis=1)  # drop columns with any NaN
+    # convert row index to a column called 'index', since feather format doesn't
+    # support row indexing
+    training_data = training_data.reset_index()
+    print(
+        strftime(
+            f"%x %X | Saving {args.protein_name} background training dataset to {args.save_training_data}"
+        )
+    )
+    training_data.to_feather(args.save_training_data)
+    # switch back
+    training_data = training_data.drop(columns=["index"]).set_index(
+        "location", verify_integrity=True
+    )
+
+    ##################################
+    # Plot PCA for training data set #
+    ##################################
+    print(
+        strftime(
+            "%x %X | Saving {0} foreground vs background PCA plot to {1}".format(
+                args.protein_name, args.save_pca_plot
             )
         )
-        training_data.to_feather(args.save_training_data)
+    )
+    X = training_data.iloc[:, 2:].to_numpy()
+    y = training_data["seq_type"].tolist()
+    y_encoded = np.ravel(label_binarize(y, classes=["Not_True", "True"]))
+    marker = ["x" if m == 0 else "o" for m in y_encoded]
+    size = ["#0066FF" if m == 0 else "#FFFFFF" for m in y_encoded]
+    colors = []
+    pipe = Pipeline(
+        [
+            ("scale", MinMaxScaler(copy=False)),
+            ("standardize", StandardScaler(copy=False)),
+        ]
+    )
+    X_scaled = pipe.fit_transform(X)
+    pca = PCA(n_components=2, whiten=True, random_state=39)
+    X_transformed = pca.fit_transform(X_scaled)
+    pc1, pc2 = tuple(pca.explained_variance_ratio_)
+    with mpl.style.context("fast"):
+        plt.figure(figsize=(10, 7), edgecolor="k", tight_layout=True)
+        for entry, label in zip(X_transformed, y_encoded):
+            if label == 0:
+                marker = "x"
+                size = 50
+                color = "#0066FF"
+            else:
+                marker = "o"
+                size = 100
+                color = "#000000"
+            plt.scatter(
+                entry[0], entry[1], s=size, c=color, marker=marker, alpha=0.5,
+            )
+        plt.figtext(
+            0.135,
+            0.935,
+            f"{args.protein_name.capitalize()}",
+            c="w",
+            backgroundcolor="k",
+            size=20,
+            weight="bold",
+            ha="center",
+            va="center",
+        )
+        plt.xlabel(f"PC1 (explained variance = {pc1:0.2%})", fontsize=20, color="k")
+        plt.ylabel(f"PC2 (explained variance = {pc2:0.2%})", fontsize=20, color="k")
+        plt.savefig(
+            args.save_pca_plot,
+            dpi=300.0,
+            format=output_format,
+            edgecolor="k",
+            bbox_inches="tight",
+            pad_inches=0.2,
+        )
 
     print(strftime("\n%x %X | END BUILD FEATURE TABLE\n"))
 
