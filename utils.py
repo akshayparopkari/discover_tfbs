@@ -5,20 +5,19 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.2.7"
+__version__ = "0.3.5"
 
 
+import shlex as sh
 import subprocess as sp
 from collections import Counter as cnt
 from collections import defaultdict
 from functools import lru_cache
-from itertools import product
-from multiprocessing import Pool
+from itertools import product, starmap
+from math import ceil, log
 from os import remove
 from os.path import abspath, basename, isfile, join, realpath
-from random import choices
-
-# imports
+from random import choice, choices
 from sys import exit
 from time import localtime, strftime
 from urllib.parse import parse_qs
@@ -29,6 +28,10 @@ try:
     from pybedtools import BedTool
 except ImportError:
     err.add("pybedtools")
+try:
+    import mmh3
+except ImportError:
+    err.add("mmh3")
 try:
     from sklearn.model_selection import permutation_test_score
 except ImportError:
@@ -41,12 +44,7 @@ try:
 except ImportError:
     err.add("matplotlib")
 try:
-    import shlex as sh
-except ImportError:
-    err.add("shlex")
-try:
     import numpy as np
-    from numpy.random import choice as npchoice
 except ImportError:
     err.add("numpy")
 try:
@@ -103,7 +101,7 @@ def reverse_complement(seq: str) -> str:
     :type seq: str
     :param seq: valid DNA nucleotide sequence without any ambiguous bases
     """
-    base_complements = Seq.IUPAC.IUPACData.ambiguous_dna_complement
+    base_complements = Seq.ambiguous_dna_complement
     return "".join([base_complements[nt] for nt in seq[::-1]])
 
 
@@ -189,19 +187,14 @@ def bkg_gc(bkg_fasta: str, outdir: str):
     outdir/bkg_gc_35.txt and outdir/bkg_gc_89.txt, respectively.
 
     :type bkg_fasta: str/file name handle
-    :param bkg_fasta: FASTA file containing background sequences
+    :param bkg_fasta: FASTA file containing false (background) sequences
 
     :type outdir: str/file name handle
     :param outdir: Folder to save binned files in
     """
     for header, seq in parse_fasta(bkg_fasta):
         bseqs = dna_iupac_codes(seq)
-        gc = {
-            s: 100
-            * (s.count("G") + s.count("C"))
-            / (s.count("G") + s.count("C") + s.count("A") + s.count("T"))
-            for s in bseqs
-        }
+        gc = {s: 100 * calculate_gc_content(s) for s in dna_iupac_codes(seq)}
         for sequence, gc in gc.items():
             outfnh = realpath(join(outdir, "bkg_gc_{}.txt".format(round(gc))))
             if isfile(outfnh):
@@ -213,9 +206,9 @@ def bkg_gc(bkg_fasta: str, outdir: str):
 
 
 @profile
-def calculate_gc_percent(sequence: str) -> float:
+def calculate_gc_content(sequence: str) -> float:
     """
-    Compute the GC percent of unambiguous input nucleotide sequence.
+    Compute the GC proportion of unambiguous input nucleotide sequence {A, T, G, C}.
 
     :type sequence: str
     :param sequence: sequence consisting of A, T, G, C letters
@@ -226,7 +219,7 @@ def calculate_gc_percent(sequence: str) -> float:
 
     # get number of G and C in input sequence
     sequence = sequence.upper()  # convert to upper case
-    gc = 100 * (sequence.count("G") + sequence.count("C")) / seq_len
+    gc = (sequence.count("G") + sequence.count("C")) / seq_len
     return gc
 
 
@@ -563,7 +556,7 @@ def get_shape_data(bedfile: str, shapefiles: list) -> dict:
         whichshape = file.split(".")[-1]
         with open(file, "r") as infasta:
             shape_data[whichshape] = {
-                header: np.array(seq.split(",")) for header, seq in sfp(infasta)
+                header: np.array(seq.strip().split(",")) for header, seq in sfp(infasta)
             }
 
     # parse BED file and get DNA shape of features listed in BED file
@@ -731,56 +724,35 @@ def get_start_prob(fasta_file, verbose=False) -> dict:
 
 
 @profile
-def get_transmat(fasta_file: str, n=5):
+def get_transmat(fasta_file: str, n=2):
     """
     From a FASTA file, generate nth order Markov chain transition probability matrix. By
-    default, a 5th order Markov chain transition matrix will be calculated and returned as
+    default, a 2nd order Markov chain transition matrix will be calculated and returned as
     Pandas dataframe.
 
     :type fasta_file: str
     :param fasta_file: FASTA file path and name handle
     """
-    try:
-        assert isfile(fasta_file)
-    except AssertionError:
-        # file doesn't exist
-        exit(
-            "\n{} does not exist. Please provide a valid FASTA file.\n".format(
-                fasta_file
-            )
-        )
-    else:
-        # parse FASTA file and collect nucleotide frequencies
-        with open(fasta_file) as infile:
-            kmer_counts = dict()
-            for title, seq in sfp(infile):
+    # parse FASTA file and collect nucleotide frequencies
+    kmer_counts = dict()
+    for header, seq in parse_fasta(fasta_file):
 
-                # get a list of all unambiguous kmers for FASTA sequence
-                seqs = [dna_iupac_codes(seq) for seq in get_kmers(seq, n + 1)]
+        # get a list of all unambiguous kmers for FASTA sequence
+        seqs = [dna_iupac_codes(seq) for seq in get_kmers(seq, n + 1)]
+        seqs = [s for seq in seqs for s in seq]
 
-                # iterate through seqs and get counts of nt following kmer
-                for kmer in seqs:
-                    try:
-                        assert len(kmer) == 1
-                    except AssertionError:
-                        # more than 1 unambiguous sequence in kmer list
-                        for mer in kmer:
-                            try:
-                                kmer_counts[mer[:-1]].update(mer[-1])
-                            except KeyError:
-                                kmer_counts[mer[:-1]] = cnt(mer[-1])
-                    else:
-                        # single unambiguous sequence in kmer list
-                        try:
-                            kmer_counts[kmer[0][:-1]].update(kmer[0][-1])
-                        except KeyError:
-                            kmer_counts[kmer[0][:-1]] = cnt(kmer[0][-1])
+        # iterate through seqs and get counts of nt following kmer
+        for kmer in seqs:
+            try:
+                kmer_counts[kmer[:-1]].update(kmer[-1])
+            except KeyError:
+                kmer_counts[kmer[:-1]] = cnt(kmer[-1])
 
-            # calculate probabilities for all nt after kmer
-            kmer_prob = {
-                k1: {k2: v2 / sum(v1.values()) for k2, v2 in v1.items()}
-                for k1, v1 in kmer_counts.items()
-            }
+    # calculate probabilities for all nt after kmer
+    kmer_prob = {
+        k1: {k2: v2 / sum(v1.values()) for k2, v2 in v1.items()}
+        for k1, v1 in kmer_counts.items()
+    }
     return pd.DataFrame.from_dict(kmer_prob, orient="index").fillna(0.0)
 
 
@@ -800,15 +772,15 @@ def markov_next_state(current: str, transmat) -> str:
     """
     states = transmat.columns
     p = transmat.loc[current]
-    return npchoice(states, p=p)
+    return choices(states, weights=p)[0]
 
 
 @profile
-def markov_seq(seq_len: int, bkg_seq: str, transmat) -> str:
+def markov_seq(seq_len: int, bkg_seq: str, transmat, degree: int) -> str:
     """
     Using transition probability matrix and a starting sequence, generate seq_len length
     sequence from a 2nd order Markov model. The final output sequence will be padded by
-    randomly generated dinucleotides.
+    five randomly generated dinucleotides.
 
     :type seq_len: int
     :param seq_len: Length of the final sequence
@@ -822,7 +794,7 @@ def markov_seq(seq_len: int, bkg_seq: str, transmat) -> str:
                      the output from get_transmat() function
     """
     for _ in range(seq_len):
-        current = bkg_seq[-2:]
+        current = bkg_seq[-degree:]
         bkg_seq += markov_next_state(current, transmat)
     return bkg_seq + random_dna(2, False)
 
@@ -851,40 +823,47 @@ def compute_overlap(bedA: str, bedB: str):
 
 
 @profile
-def gc_len_matched_bkg_seq_gen(fg_seqs: dict, transmat: dict, tol=5) -> dict:
+def gc_len_matched_bkg_seq_gen(
+    fg_seq: str, transmat: dict, fg_seqs: list, degree=2, tol=1
+) -> dict:
     """
-    Using 2nd order Markov model trained on Drosophila melanogaster and Escherichia coli
-    coding sequence regions, generate GC content and length matched background sequence.
-    GC content is allowed a controllable difference of 5% around the GC content of
-    foreground sequence.
+    Using a markov model trained on non-Candida genome coding sequence regions,
+    generate GC content and length matched false (background) sequence. GC content is
+    allowed a controllable difference of 5% around the GC content of true (foreground)
+    sequence.
 
     :type fg_seqs: dict
-    :param fg_seqs: Parsed FASTA file of foreground sequences
-
+    :param fg_seqs: Parsed FASTA file of true (foreground) sequences
 
     :type transmat: dict
     :param transmat: A dict containing all transition probability matrix dataframe.
                      Ideally, the dataframes will be output from get_transmat()
     """
-    bkg_seqs = dict()
-    for header, seq in fg_seqs.items():
-        for entry in dna_iupac_codes(seq):
-            gc = round(calculate_gc_percent(seq))
-            seq_len = len(seq)
-            random_key = choices(list(transmat.keys()))[0]
-            while True:
-                bkg_seqs[header] = markov_seq(
-                    seq_len, random_dna(2, False), transmat[random_key]
-                )
-                core_seq = bkg_seqs[header][2:-2]
-                if core_seq not in fg_seqs.values():
-                    gc_diff = abs(gc - round(calculate_gc_percent(core_seq)))
-                    if gc_diff <= tol:
-                        break
-    return bkg_seqs
+    try:
+        fg_iupac_seqs = dna_iupac_codes(fg_seq)
+        assert len(fg_iupac_seqs) == 1
+    except AssertionError as exc:
+        fg_seq = choice(fg_iupac_seqs)
+    finally:
+        gc = round(100 * calculate_gc_content(fg_seq))
+        seq_len = len(fg_seq)
+        random_key = choice(list(transmat.keys()))
+        while True:
+            gc_len_matched_bkg_seq = markov_seq(
+                seq_len, random_dna(degree, False), transmat[random_key], degree
+            )
+            start, end = (
+                degree,
+                0 - degree,
+            )
+            core_seq = gc_len_matched_bkg_seq[start:end]
+            gc_diff = abs(gc - round(100 * calculate_gc_content(core_seq)))
+            if core_seq not in fg_seqs:
+                if gc_diff <= tol and jaccard_similarity(fg_seq, core_seq) < 0.1:
+                    return gc_len_matched_bkg_seq
 
 
-@lru_cache(512)
+@lru_cache(256)
 def _cdf(k: int, mu: float):
     """
     From Python3 docs - Decorator to wrap a function with a memoizing callable that saves
@@ -906,61 +885,59 @@ def pac(seqA: str, seqB: str):
     :type seqA: str
     :param seqA: Nucleotide sequence, preferably unambiguous DNA sequence
     """
-    # length of kmer is half if seqA length
-    k = round(len(seqA) / 3)
+    # length of kmer is one-third of seqA length
+    n = len(seqA)
+    q = 0.01
+    k = ceil(log((n * (1 - q)) / q, 4))  # Based on MASH's methods recommendation
 
     # kmer word count for seqA
     seqA_kmers = get_kmers(seqA, k)
     n_seqA_kmers = len(seqA_kmers)
     seqA_wc = {kmer: seqA_kmers.count(kmer) for kmer in seqA_kmers}
     # prior probability of kmer 'w'
-    fw_A = {word: freq / n_seqA_kmers for word, freq in seqA_wc.items()}
+    ppw_A = {word: freq / n_seqA_kmers for word, freq in seqA_wc.items()}
     # expected number of occurrences
-    mw_A = {word: pp * n_seqA_kmers for word, pp in fw_A.items()}
+    mw_A = {word: pp * n_seqA_kmers for word, pp in ppw_A.items()}
 
+    # kmer word count for seqB
     seqB_kmers = get_kmers(seqB, k)
     n_seqB_kmers = len(seqB_kmers)
     seqB_wc = {kmer: seqB_kmers.count(kmer) for kmer in seqB_kmers}
     # prior probability of kmer 'w'
-    fw_B = {word: freq / n_seqB_kmers for word, freq in seqB_wc.items()}
+    ppw_B = {word: freq / n_seqB_kmers for word, freq in seqB_wc.items()}
     # expected number of occurrences
-    mw_B = {word: pp * n_seqB_kmers for word, pp in fw_B.items()}
+    mw_B = {word: pp * n_seqB_kmers for word, pp in ppw_B.items()}
 
-    total_patterns = set(seqA_kmers + seqB_kmers)
-    n_patterns = len(total_patterns)
+    n_patterns = len(seqA_kmers)
     sga = seqA_wc.get
     sgb = seqB_wc.get
-    for word in total_patterns:
+    for word in seqA_kmers:
         wc_seqA = sga(word, 0)
         wc_seqB = sgb(word, 0)
-        Cw_AB = wc_seqB if wc_seqA > wc_seqB else wc_seqA
-        if Cw_AB > 0:
-            prob = (1 - _cdf(Cw_AB - 1, mw_A[word])) * (1 - _cdf(Cw_AB - 1, mw_B[word]))
-        else:
-            prob = 1
+        Cw_AB = min(wc_seqA, wc_seqB)
+        prob = (
+            (1 - _cdf(Cw_AB - 1, mw_A[word])) * (1 - _cdf(Cw_AB - 1, mw_B[word]))
+            if Cw_AB > 0
+            else 1
+        )
         try:
-            prod
+            prod *= prob  # update poisson product similarity
         except NameError:
-            # prod doesn't exist, initialize it
             prod = prob
-        else:
-            # prod exists, update its value
-            prod *= prob
         try:
-            similarity
+            sim = 1 - prob
+            similarity += sim  # update poisson additive similarity
         except NameError:
-            # prod doesn't exist, initialize it
             similarity = 1 - prob
-        else:
-            # prod exists, update its value
-            similarity += 1 - prob
-    prod = 1 - (prod ** (1 / n_patterns))
+    product = 1 - (prod ** (1 / n_patterns))
     similarity = similarity / n_patterns
-    return similarity, prod
+    return similarity, product
 
 
 @profile
-def permutation_result(estimator, X, y, cv, file: str, n_permute=5000, random_state=0):
+def permutation_result(
+    protein, estimator, X, y, cv, file: str, n_permute=1000, random_state=39
+):
     """
     Run permutation tests for classifier and assess significance of accuracy score. This
     is a wrapper around sklearn.model_selection.permutation_test_score
@@ -990,7 +967,7 @@ def permutation_result(estimator, X, y, cv, file: str, n_permute=5000, random_st
         estimator,
         X,
         y,
-        scoring="balanced_accuracy",
+        scoring="average_precision",
         cv=cv,
         n_permutations=n_permute,
         n_jobs=-1,
@@ -998,95 +975,367 @@ def permutation_result(estimator, X, y, cv, file: str, n_permute=5000, random_st
     )
     print(
         strftime(
-            "%x %X | Linear SVM classification score {0:0.3f} (pvalue : {1:0.5f})".format(
+            "%x %X | Linear SVM classification score {0:0.3f} (pvalue: {1:0.5f})".format(
                 score, p_value
             )
         )
     )
-    with mpl.style.context("ggplot"):
-        plt.figure(figsize=(10, 8))
+    with mpl.style.context("fast"):
+        plt.figure(figsize=(10, 7), edgecolor="k", tight_layout=True)
         plt.hist(
             permutation_score,
             bins=25,
             alpha=0.5,
             hatch="//",
             edgecolor="w",
-            label="Permutation scores for shuffled labels",
+            label="Precision scores for shuffled labels",
         )
         ylim = plt.ylim()[1]
         plt.vlines(
             2 * [1.0 / np.unique(y).size], 0, ylim, linewidth=3, label="50/50 chance"
         )
         plt.vlines(2 * [score], 0, ylim, linewidth=3, colors="g")
-        plt.title("Model Accuracy Score = {:0.2f}*".format(100 * score), color="g")
-        plt.xlim(0.0, 1.0)
+        plt.title(
+            "Model Average Precision Score = {:0.2f}*".format(100 * score),
+            color="g",
+            fontsize=20,
+        )
+        plt.xlim(0.0, 1.1)
         plt.legend(loc=2)
-        plt.xlabel("Accuracy score as proportion")
-        plt.ylabel("Frequency of calculated accuracy score")
-        plt.tight_layout()
-        plt.savefig(file, dpi=300, format="pdf", bbox_inches="tight")
+        plt.figtext(
+            0.15,
+            0.815,
+            f"{protein.capitalize()}",
+            c="w",
+            backgroundcolor="k",
+            size=20,
+            weight="bold",
+            ha="center",
+            va="center",
+        )
+        plt.xlabel("Average precision score", fontsize=20, color="k")
+        plt.ylabel("Frequency", fontsize=20, color="k")
+        plt.savefig(
+            file,
+            dpi=300,
+            format="pdf",
+            bbox_inches="tight",
+            edgecolor="k",
+            pad_inches=0.2,
+        )
+
+
+def _minhash_similarity(seqA: str, true_seqs: list) -> float:
+    """
+    Given a test sequence (seqA)  and list of reference sequences (true_seqs), calculate
+    the average MinHash similarity score for seqA.
+    """
+    return np.mean(list(starmap(jaccard_similarity, product(true_seqs, [seqA]))))
+
+
+def _pac(seqA: str, true_seqs: list) -> float:
+    """
+    Given a test sequence (seqA)  and list of reference sequences (true_seqs), calculate
+    the average Poisson similarity score for seqA.
+    """
+    pas = [pac(*pair)[0] for pair in product(true_seqs, [seqA])]
+    pps = [pac(*pair)[1] for pair in product(true_seqs, [seqA])]
+    return {"PAS": np.mean(pas), "PPS": np.mean(pps)}
+
+
+def _get_DNA_shape(loc: str, shapedata: dict, shape: str) -> dict:
+    """
+    Get DNA shape data from genomic coordinates.
+    """
+    chrom, location = tuple(loc.split(":"))
+    strand = location.split("(")[1][0]
+    start = int(location.split("-")[0])
+    end = int(location.split("(")[0].split("-")[1])
+
+    # get shape values
+    shapes = {}
+    if strand == "+":
+        for i, value in enumerate(shapedata[chrom][start : end + 1]):
+            try:
+                shapes[f"{shape}_{i + 1:02d}"] = float(value)
+            except ValueError:
+                shapes[f"{shape}_{i + 1:02d}"] = 0.0
+    else:
+        for i, value in enumerate(shapedata[chrom][end : start - 1 : -1]):
+            try:
+                shapes[f"{shape}_{i + 1:02d}"] = float(value)
+            except ValueError:
+                shapes[f"{shape}_{i + 1:02d}"] = 0.0
+    return shapes
 
 
 @profile
 def build_feature_table(
-    infasta: str, truefasta: str, fg_bed_file: str, genome_wide_shape_fasta_file: list
+    infasta: str, truefasta: str, genome_wide_shape_data=None, minhash=True
 ):
     """
-    Build feature table by calculating/retrieving all relevant characteristics.
+    Build feature table by calculating/retrieving all relevant characteristics -
+    1. sequence GC percent value
+    2. Poisson additive similarity score
+    3. Poisson multiplicative similarity score
+    4. MinHash based similarity score
+    5. sequence DNA shape values (EP, HelT, MGM, Prot, Roll)
+    and return a Pandas dataframe
 
-    :infasta: Input FASTA file with foreground/true sequences
+    :infasta: Input FASTA file with true (foreground) or genome-wide BLASTn match sequences
 
-    :truefasta: FASTA file with true/foreground sequences to be used for calculating
+    :truefasta: FASTA file with true (foreground) sequences to be used for calculating
                 Poisson based similarity metrics
 
-    :fg_bed_file: Path to foreground/true binding event BED file. This file must have a
-                  minimum of BED6 format - i.e. chrom start end name score strand columns
-
-    :genome_wide_shape_fasta_file: A list with paths to genome-wide 3D DNA shape
-                                   (DNAShapeR output files) data single-line FASTA format
-                                   files associated with '--predict' parameters
+    :genome_wide_shape_data: A dict with genome-wide 3D DNA shape (DNAShapeR output files)
+                             data single-line. The format would be ->
+                             {"shape_name": {chromosome: ['0.0', '0.0', ..., '0.0']}}
     """
-    # read in FASTA data
-    print(strftime("%x %X | Reading input FASTA file"))
-    fg_data = {header: seq for header, seq in parse_fasta(infasta)}
-
-    # calculate GC percent for all foreground seqs
-    print(strftime("%x %X | Calculating GC percent"))
-    fg_gc = dict(
-        zip(list(fg_data.keys()), map(calculate_gc_percent, list(fg_data.values())))
+    print(strftime("%x %X | Begin building feature table"))
+    tf_data = pd.DataFrame.from_dict(
+        {header: seq for header, seq in parse_fasta(infasta)},
+        orient="index",
+        columns=["sequence"],
     )
-    fg_gc_df = pd.DataFrame.from_dict(fg_gc, orient="index", columns=["GC_percent"])
+    tf_data = tf_data.reset_index().rename(columns={"index": "location"})
+    true_seqs = {seq for header, seq in parse_fasta(truefasta)}
 
-    # calculate poisson based metric
-    print(strftime("%x %X | Calculating Poisson based metrics"))
-    true_seqs = {header: seq for header, seq in parse_fasta(truefasta)}
-    seq_pairs = (
-        list(product([seq], list(true_seqs.values()))) for seq in fg_data.values()
+    # Add GC percent column
+    print(strftime("%x %X | Calculating GC content of input sequences"))
+    tf_data["GC_content"] = tf_data["sequence"].apply(calculate_gc_content)
+
+    if minhash:
+        # Add MinHash similarity score column
+        print(strftime("%x %X | Calculating MinHash similarity score"))
+        tf_data["MinHash"] = tf_data["sequence"].apply(
+            _minhash_similarity, args=(true_seqs,)
+        )
+
+    # Add Poisson similarity score columns
+    print(strftime("%x %X | Calculating Poisson similarity scores"))
+    tf_data["PBS"] = tf_data["sequence"].apply(_pac, args=(true_seqs,))
+    tf_data = tf_data.join(pd.json_normalize(tf_data["PBS"])).drop(columns=["PBS"])
+
+    if genome_wide_shape_data:
+        # Retrieve DNA shapes for input sequences
+        print(strftime("%x %X | Retrieving Electrostatic potential shape values"))
+        tf_data["EP"] = tf_data["location"].apply(
+            _get_DNA_shape, args=(genome_wide_shape_data["EP"], "EP",)
+        )
+        tf_data = tf_data.join(pd.json_normalize(tf_data["EP"])).drop(columns=["EP"])
+
+        print(strftime("%x %X | Retrieving Helix Twist shape values"))
+        tf_data["HelT"] = tf_data["location"].apply(
+            _get_DNA_shape, args=(genome_wide_shape_data["HelT"], "HelT",)
+        )
+        tf_data = tf_data.join(pd.json_normalize(tf_data["HelT"])).drop(
+            columns=["HelT"]
+        )
+
+        print(strftime("%x %X | Retrieving Minor groove width shape values"))
+        tf_data["MGW"] = tf_data["location"].apply(
+            _get_DNA_shape, args=(genome_wide_shape_data["MGW"], "MGW",)
+        )
+        tf_data = tf_data.join(pd.json_normalize(tf_data["MGW"])).drop(columns=["MGW"])
+
+        print(strftime("%x %X | Retrieving Propeller twist shape values"))
+        tf_data["ProT"] = tf_data["location"].apply(
+            _get_DNA_shape, args=(genome_wide_shape_data["ProT"], "ProT",)
+        )
+        tf_data = tf_data.join(pd.json_normalize(tf_data["ProT"])).drop(
+            columns=["ProT"]
+        )
+
+        print(strftime("%x %X | Retrieving Roll shape values"))
+        tf_data["Roll"] = tf_data["location"].apply(
+            _get_DNA_shape, args=(genome_wide_shape_data["Roll"], "Roll",)
+        )
+        tf_data = tf_data.join(pd.json_normalize(tf_data["Roll"])).drop(
+            columns=["Roll"]
+        )
+
+    print(strftime("%x %X | Finished building feature table"))
+    return tf_data
+
+
+@profile
+def plot_coefficients(feature_score, feature_names, protein, file: str):
+    """
+    Using the coefficient weights, plot the contribution of each feature in
+    classification. Currently, this function is set up for binary classification.
+
+    :type feature_score: array-like, list or numpy array
+    :param feature_score: SVM/LDA weights assigned to each feature.
+
+    :type feature_names: list
+    :param feature_names: List of feature names to use for plotting
+
+    :type file: str
+    :param file: Path and name of file to save feature contribution bar plot. The file
+                 will be saved in PDF format.
+    """
+    feature_names = np.asarray([name.replace("_", " ") for name in feature_names])
+    feature_rank = feature_score.importances_mean.argsort()[::-1]
+    res = list(
+        zip(
+            feature_names[feature_rank],
+            feature_score.importances_mean[feature_rank][
+                feature_score.importances_mean[feature_rank] > 0
+            ],
+            feature_score.importances_std[feature_rank],
+        )
     )
-    with Pool() as pool:
+    res = pd.DataFrame(res, columns=["Feature", "Mean_score", "Std_score"]).sort_values(
+        "Mean_score", ascending=False
+    )
+    res = res.head(10)
+
+    # create plot
+    with mpl.style.context("fast"):
+        plt.figure(figsize=(10, 6), edgecolor="k", tight_layout=True)
+        plt.barh(
+            range(len(res)),
+            res["Mean_score"][::-1],
+            color="#c8c8c8",
+            edgecolor="k",
+            tick_label=res["Feature"][::-1],
+        )
+        plt.yticks(fontsize=14)
+        plt.figtext(
+            0.925,
+            0.165,
+            f"{protein.capitalize()}",
+            c="w",
+            backgroundcolor="k",
+            size=20,
+            weight="bold",
+            ha="center",
+            va="center",
+        )
+        plt.xlabel("Mean contribution score", fontsize=16, color="k")
+        plt.grid(axis="x", ls=":")
+        plt.savefig(
+            file,
+            dpi=300,
+            format="pdf",
+            bbox_inches="tight",
+            edgecolor="k",
+            pad_inches=0.1,
+        )
+
+
+@profile
+def jaccard_similarity(a: str, b: str) -> float:
+    """
+    Given two sequences, calculate their Jaccard similarity score using minhash algorithm.
+    """
+    k = ceil(log((len(a) * 0.99) / 0.01, 4))
+    seqA_kmers_hashed = set([_minhash_kmer(kmer) for kmer in get_kmers(a, k)])
+
+    seqB_kmers_hashed = set([_minhash_kmer(kmer) for kmer in get_kmers(b, k)])
+
+    numerator = len(seqA_kmers_hashed.intersection(seqB_kmers_hashed))
+    denominator = len(seqA_kmers_hashed.union(seqB_kmers_hashed))
+
+    return numerator / denominator
+
+
+@profile
+def _minhash_kmer(kmer: str) -> int:
+    """
+    Given a k length string of unambiguous nucleotide, return its 32-bit hash value.
+    Both kmer and its reverse complement are compared and hash value for lexicographically
+    smaller sequence is returned.
+    """
+    kmer_rc = reverse_complement(kmer)
+    if kmer < kmer_rc:
+        return mmh3.hash(kmer, seed=39, signed=False)
+    else:
+        return mmh3.hash(kmer_rc, seed=39, signed=False)
+
+
+@profile
+def get_closest_genes(bedfile: str, genome_file: str):
+    """
+    Given a genome file and TFBS data in BED format, return closest gene to each TFBS and
+    counts of TFBS for closest gene.
+
+    :param bedfile: True/foreground or model predicted TFBS in BED6 format
+    :param genome_file: Candida albicans or other model organism ORF feature only GFF file
+    """
+    # Read in files with BedTool
+    bedfile = BedTool(bedfile)
+    genome_file = BedTool(genome_file)
+    orfs = {}
+
+    # Iterate over the closest gene to each TFBS and get information of the closest gene
+    for line in bedfile.closest(genome_file, D="b", stream=True):
+        orf_info = line.fields[12].split(";")
+        for entry in orf_info:
+            if entry.startswith("Name"):
+                name = "_".join(entry.split("=")[1].split("_")[:-1])
+                if orfs.get(name, False):
+                    # Gene entry exists in orfs dict, increment the TFBS count for gene
+                    orfs[name]["Closest_TFBS_Counts"] += 1
+                    continue
+                else:
+                    # Gene entry does not exist in orfs dict, initialize gene entry
+                    orfs[name] = {
+                        "Gene_Function": "NA",
+                        "Gene_Name": "NA",
+                        "Closest_TFBS_Counts": 1,
+                    }
+
+            if entry.startswith("Gene"):
+                # Get human readable gene name
+                orfs[name]["Gene_Name"] = entry.split("=")[1]
+            elif entry.startswith("Note"):
+                # Get human readable gene function
+                try:
+                    orfs[name]["Gene_Function"] = (
+                        entry.split("=")[1].replace("_", " ").strip()
+                    )
+                except Exception as exc:
+                    print(
+                        exc,
+                        "\n",
+                        entry,
+                        "\n",
+                        line.strip().split("\t")[12].split(";"),
+                        "\n",
+                    )
+                    break
+            elif entry.startswith("_"):
+                # Append additional human readable gene function entries
+                orfs[name]["Gene_Function"] += ";" + entry.replace("_", " ").rstrip()
+            else:
+                continue
+
+        # How far is TFBS away from closest gene/TSS?
         try:
-            fg_poisson_metrics = [
-                np.asarray(pool.starmap(pac, pair_set)).mean(axis=0, dtype=np.float32)
-                for pair_set in seq_pairs
-            ]
-        except Exception as err:
-            return err
-        else:
-            fg_pac = dict(zip(fg_data.keys(), fg_poisson_metrics))
-            fg_pac_df = pd.DataFrame.from_dict(
-                fg_pac, orient="index", columns=["PAS", "PPS"]
-            )
+            orfs[name]["Distance_from_gene"] += int(line.fields[13])
+        except Exception:
+            orfs[name]["Distance_from_gene"] = int(line.fields[13])
 
-    # calculate/retrieve shape values
-    print(strftime("%x %X | Processing DNA shape data"))
-    fg_shapes = get_shape_data(fg_bed_file, genome_wide_shape_fasta_file)
-    fg_shapes_df = pd.DataFrame.from_dict(fg_shapes, orient="index")
-
-    # create pandas dataframe and return it
-    training_data_df = fg_gc_df.merge(
-        fg_pac_df, how="outer", left_index=True, right_index=True
+    # Convert dict to pandas dataframe and make it pretty
+    orfs_df = (
+        pd.DataFrame.from_dict(orfs, orient="index")
+        .reset_index()
+        .rename(columns={"index": "Systematic_Name"})
+        .sort_values("Closest_TFBS_Counts", ascending=False)
     )
-    training_data_df = training_data_df.merge(
-        fg_shapes_df, how="outer", left_index=True, right_index=True
+    orfs_df["Mean_dist_from_gene"] = (
+        orfs_df["Distance_from_gene"] / orfs_df["Closest_TFBS_Counts"]
     )
-    return training_data_df
+    orfs_df.drop(columns="Distance_from_gene", inplace=True)
+    orfs_df = orfs_df.loc[
+        :,
+        [
+            "Systematic_Name",
+            "Gene_Name",
+            "Closest_TFBS_Counts",
+            "Mean_dist_from_gene",
+            "Gene_Function",
+        ],
+    ]
+    return orfs_df
