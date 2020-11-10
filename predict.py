@@ -6,7 +6,7 @@ binding site.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.3.4"
+__version__ = "0.3.5"
 
 
 import argparse
@@ -429,8 +429,8 @@ def main():
                 plt.fill_between(
                     new_predictions, true_predictions, alpha=0.5, step="post"
                 )
-                plt.xlabel("Positive Predictions", color="k", size=20)
-                plt.ylabel("True Positives", color="k", size=20)
+                plt.xlabel("Positive prediction rate", color="k", size=20)
+                plt.ylabel("True positives rate", color="k", size=20)
                 plt.figtext(
                     0.2,
                     0.935,
