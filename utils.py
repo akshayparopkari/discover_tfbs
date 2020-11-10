@@ -5,7 +5,7 @@ File containing utility functions.
 """
 
 __author__ = "Akshay Paropkari"
-__version__ = "0.3.5"
+__version__ = "0.3.7"
 
 
 import shlex as sh
@@ -132,6 +132,21 @@ def dna_iupac_codes(seq: str) -> list:
         "N": ["A", "C", "G", "T"],
     }
     return list(map("".join, product(*[iupac_codes[nt.upper()] for nt in seq])))
+
+
+@profile
+def FASTA_header_to_bed6(header: str) -> str:
+    """
+    Given a FASTA header with format "chrom:start-end(strand)" like "Ca22chr1A:293970-293981(-)",
+    return the genome location in BED6 format.
+
+    :param header: FASTA header like Ca22chr1A:293970-293981(-)
+    """
+    chrom, coordinates = tuple(header.split(":"))
+    start = coordinates.split("-")[0]
+    end = coordinates.split("(")[0].split("-")[1]
+    strand = coordinates.split("(")[1][0]
+    return "\t".join([chrom, start, end, ".", ".", strand])
 
 
 @profile
